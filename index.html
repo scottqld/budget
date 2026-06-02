@@ -1,0 +1,1746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Budget</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #faf9f5;
+      --bg-secondary: #F5F4EF;
+      --bg-card: #ffffff;
+      --text-primary: #141413;
+      --text-secondary: #5c5c5a;
+      --text-muted: #8c8c8a;
+      --accent: #D97757;
+      --accent-hover: #c4684a;
+      --border: #e5e4df;
+      --border-light: #eeeee9;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 0 24px 20px;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg-primary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; }
+
+    button {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s ease;
+    }
+    button:hover { border-color: var(--accent); color: var(--accent); }
+    button.primary { background: var(--accent); color: white; border-color: var(--accent); }
+    button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: white; }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      padding: 60px 20px;
+      text-align: center;
+    }
+
+    #status {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--text-primary);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #status.visible { opacity: 1; }
+
+    /* Budget styles */
+    .budget-month-selector { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
+    .budget-tabs { display:flex; border-bottom:2px solid var(--border); margin-bottom:20px; gap:0; }
+    .budget-tab { padding:10px 20px; font-size:13px; font-weight:500; color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; background:none; border-top:none; border-left:none; border-right:none; font-family:inherit; transition:color 0.15s; }
+    .budget-tab:hover { color:var(--text-primary); }
+    .budget-tab.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
+    .budget-month-btn {
+      background: var(--bg-secondary); border: 1px solid var(--border);
+      padding: 5px 12px; font-size: 12px; border-radius: 6px; color: var(--text-secondary);
+    }
+    .budget-month-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .budget-month-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+    .budget-summary-cards {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px;
+    }
+    .budget-card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 16px;
+    }
+    .budget-card-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 6px;
+    }
+    .budget-card-value { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+    .budget-card-value.income { color: #16a34a; }
+    .budget-card-value.expense { color: var(--accent); }
+
+    .budget-two-col {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+      margin-bottom: 24px; align-items: start;
+    }
+    .budget-section-title {
+      font-size: 12px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 10px;
+    }
+    .budget-panel-box {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px;
+    }
+
+    .budget-bar-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 0; border-bottom: 1px solid var(--border-light); font-size: 12px;
+    }
+    .budget-bar-row:last-child { border-bottom: none; }
+    .budget-bar-label {
+      flex: 0 0 140px; color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px;
+    }
+    .budget-bar-wrap { flex: 1; height: 6px; background: var(--bg-secondary); border-radius: 3px; overflow: hidden; }
+    .budget-bar { height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.3s ease; }
+    .budget-bar.over { background: #ef4444; }
+    .budget-bar.blue { background: #60a5fa; }
+    .budget-bar-amount { flex: 0 0 75px; text-align: right; font-weight: 500; color: var(--text-primary); }
+    .budget-bar-extra { flex: 0 0 90px; text-align: right; font-size: 11px; color: var(--text-muted); }
+    .budget-bar-extra .over { color: #ef4444; }
+    .budget-bar-extra .under { color: #16a34a; }
+    .budget-rank { flex: 0 0 18px; font-size: 11px; color: var(--text-muted); font-weight: 600; }
+    .set-limit-btn {
+      background: transparent; border: 1px solid var(--border);
+      padding: 2px 7px; font-size: 11px; border-radius: 4px; color: var(--text-muted);
+    }
+    .set-limit-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .budget-trend-wrap {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 16px; margin-bottom: 24px; overflow-x: auto;
+    }
+    .budget-trend { display: flex; align-items: flex-end; gap: 8px; min-height: 110px; }
+    .budget-trend-group {
+      display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; flex-shrink: 0;
+    }
+    .budget-trend-group:hover .budget-trend-bars { opacity: 0.7; }
+    .budget-trend-group.selected .budget-trend-month { color: var(--accent); font-weight: 600; }
+    .budget-trend-bars { display: flex; align-items: flex-end; gap: 2px; height: 80px; }
+    .budget-trend-bar { width: 16px; border-radius: 3px 3px 0 0; min-height: 2px; }
+    .budget-trend-bar.income { background: #16a34a; opacity: 0.75; }
+    .budget-trend-bar.expense { background: var(--accent); opacity: 0.75; }
+    .budget-trend-month { font-size: 10px; color: var(--text-muted); white-space: nowrap; }
+
+    .budget-tx-list {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden; margin-bottom: 24px;
+    }
+    .budget-tx-date-header {
+      padding: 6px 16px; font-size: 11px; font-weight: 600;
+      color: var(--text-muted); background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-light); letter-spacing: 0.03em;
+    }
+    .budget-tx-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 9px 16px; border-bottom: 1px solid var(--border-light); font-size: 12px;
+    }
+    .budget-tx-row:last-child { border-bottom: none; }
+    .budget-tx-date { flex: 0 0 60px; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+    .budget-tx-merchant { flex: 1; color: var(--text-primary); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .budget-tx-cat-badge { flex: 0 0 auto; font-size: 10px; padding: 2px 8px; border-radius: 10px; background: var(--bg-secondary); color: var(--text-muted); white-space: nowrap; border: 1px solid var(--border-light); }
+    .budget-tx-amount { flex: 0 0 85px; text-align: right; font-weight: 500; }
+    .budget-tx-amount.income { color: #16a34a; }
+    .budget-tx-amount.expense { color: var(--accent); }
+    .budget-tx-balance { flex: 0 0 80px; text-align: right; color: var(--text-muted); font-size: 11px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.9</span></h1>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
+      <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
+      <button id="changeFolderBtn" style="display:none;font-size:12px;padding:6px 12px">Change folder</button>
+      <button id="importBtn" class="primary">Import</button>
+    </div>
+  </header>
+
+  <div id="settingsPanel" style="display:none;background:var(--bg-card);border-bottom:1px solid var(--border);padding:14px 24px;font-size:13px">
+    <div style="display:flex;gap:32px;align-items:flex-start;flex-wrap:wrap">
+      <div>
+        <div style="font-weight:600;color:var(--text-primary);margin-bottom:6px">Anthropic API key
+          <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:6px">Stored locally, only used to call the Anthropic API</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <input id="apiKeyInput" type="password" placeholder="sk-ant-…" style="width:320px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--text-primary);font-family:monospace">
+          <button onclick="saveApiKey()" class="primary" style="font-size:12px;padding:6px 14px">Save</button>
+          <button onclick="clearApiKey()" style="font-size:12px;padding:6px 14px">Clear key &amp; cache</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-weight:600;color:var(--text-primary);margin-bottom:6px">Merchant categorisation
+          <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:6px">Uses Claude Haiku to classify unknown merchants</span>
+        </div>
+        <button onclick="classifyUnknownMerchants()" class="primary" style="font-size:12px;padding:6px 14px">✦ Auto-classify merchants</button>
+        <span id="classifyStatus" style="margin-left:10px;font-size:12px;color:var(--text-muted)"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="stickyBar" style="position:sticky;top:53px;z-index:90;background:var(--bg-primary);padding:10px 0 0;margin-bottom:4px;border-bottom:1px solid var(--border)"></div>
+
+  <div id="emptyState" class="empty-state">
+    <p style="margin-bottom:24px;font-size:18px;font-weight:600;color:var(--text-primary);">No transaction data yet</p>
+    <p style="color:var(--text-muted);margin-bottom:16px;font-size:14px;">Click Import to load your Data_Export_*.csv files</p>
+    <button id="importBtnLarge" class="primary">Import</button>
+  </div>
+
+  <div id="mainContent" style="display:none;">
+    <div id="budgetContent"></div>
+  </div>
+
+  <input type="file" id="folderInput" webkitdirectory accept=".csv" style="display:none">
+  <div id="status"></div>
+
+  <script>
+    // ===== STATE =====
+    let budgetFolderHandle = null;
+    let budgetTransactions = [];
+    let budgetLimits = {};
+    const ACCOUNT_NAMES = {
+      '032116332425':  'Scotts Cash Investment',
+      '033040289567':  'Westpac eSaver',
+      '733065602561':  'Westpac Choice',
+      '037184352797':  'Rocket Repay',
+      '3238':          'Black Mastercard',
+      '9962':          'Platinum Mastercard',
+    };
+    function acctName(id) { return ACCOUNT_NAMES[id] || id; }
+    const EXCLUDED_ACCOUNTS = new Set(['9962', '033040289567']); // Platinum Mastercard, Westpac eSaver
+    const _acctPalette = ['#D97757', '#3b82f6', '#16a34a', '#f59e0b', '#8b5cf6', '#ec4899'];
+    function acctColor(id) {
+      const all = [...new Set(budgetTransactions.map(t => t.account))].filter(Boolean).sort();
+      return _acctPalette[Math.max(all.indexOf(id), 0) % _acctPalette.length];
+    }
+
+    const MERCHANT_CATS = {
+      // Groceries
+      'Aldi':               'Groceries',
+      'Coles':              'Groceries',
+      'Woolworths':         'Groceries',
+      'Iga':                'Groceries',
+      'Foodworks':          'Groceries',
+      'Harris Farm':        'Groceries',
+      'Costco':             'Groceries',
+      'Drakes':             'Groceries',
+      'Spar':               'Groceries',
+      // Fuel
+      'Bp':                 'Fuel',
+      'Shell':              'Fuel',
+      'Caltex':             'Fuel',
+      'Ampol':              'Fuel',
+      '7-Eleven':           'Fuel',
+      'United Petroleum':   'Fuel',
+      'Puma Energy':        'Fuel',
+      'Mobil':              'Fuel',
+      'Metro Petroleum':    'Fuel',
+      'On The Run':         'Fuel',
+      // Dining
+      "Mcdonalds":          'Dining',
+      "Mcdonald's":         'Dining',
+      'Kfc':                'Dining',
+      'Subway':             'Dining',
+      'Hungry Jacks':       'Dining',
+      'Dominos':            'Dining',
+      "Domino's":           'Dining',
+      'Pizza Hut':          'Dining',
+      'Red Rooster':        'Dining',
+      "Grill'd":            'Dining',
+      'Grilled':            'Dining',
+      "Nando's":            'Dining',
+      'Nandos':             'Dining',
+      'Oporto':             'Dining',
+      'Zambrero':           'Dining',
+      'Boost Juice':        'Dining',
+      'Gloria Jeans':       'Dining',
+      'Starbucks':          'Dining',
+      'Coffee Club':        'Dining',
+      'Muffin Break':       'Dining',
+      "Zarraffa's":         'Dining',
+      'Zarraffas':          'Dining',
+      'Degani':             'Dining',
+      'Chatime':            'Dining',
+      'Guzman':             'Dining',
+      // Entertainment & Subscriptions
+      'Netflix':            'Entertainment',
+      'Stan':               'Entertainment',
+      'Disney':             'Entertainment',
+      'Spotify':            'Entertainment',
+      'Binge':              'Entertainment',
+      'Foxtel':             'Entertainment',
+      'Amazon Prime':       'Entertainment',
+      'Youtube':            'Entertainment',
+      'Google Play':        'Entertainment',
+      'Adobe':              'Entertainment',
+      'Steam':              'Entertainment',
+      'Playstation':        'Entertainment',
+      'Xbox':               'Entertainment',
+      'Nintendo':           'Entertainment',
+      'Canva':              'Entertainment',
+      // Shopping
+      'Kmart':              'Shopping',
+      'Target':             'Shopping',
+      'Big W':              'Shopping',
+      'Myer':               'Shopping',
+      'David Jones':        'Shopping',
+      'Cotton On':          'Shopping',
+      'Uniqlo':             'Shopping',
+      'Zara':               'Shopping',
+      'Jb Hi-Fi':           'Shopping',
+      'Harvey Norman':      'Shopping',
+      'The Good Guys':      'Shopping',
+      'Officeworks':        'Shopping',
+      'Bunnings':           'Renovations',
+      'Benchmark':          'Renovations',
+      'Power Play Electrics': 'Renovations',
+      'Power Play':         'Renovations',
+      'Apex Gutter':        'Renovations',
+      'Abiinteriors':       'Renovations',
+      'Ncp Bathroom':       'Renovations',
+      'Yabby':              'Renovations',
+      'Christopher Robert Bur': 'Healthcare',
+      'Griet Desomer':      'Healthcare',
+      'Osteos Of Noosa':    'Healthcare',
+      'Sundoctors':         'Healthcare',
+      'Tewantin Garage':    'Car Care',
+      'Bridgestone':        'Car Care',
+      'Pet Insurance':      'Pets',
+      'Jumbopets':          'Pets',
+      'Ikea':               'Shopping',
+      'Rebel Sport':        'Shopping',
+      'Anaconda':           'Shopping',
+      'Amazon':             'Shopping',
+      'Ebay':               'Shopping',
+      'Catch':              'Shopping',
+      // Pharmacy & Health
+      'Chemist Warehouse':  'Healthcare',
+      'Priceline':          'Healthcare',
+      'Terry White':        'Healthcare',
+      'Amcal':              'Healthcare',
+      'Blooms':             'Healthcare',
+      'Discount Drug':      'Healthcare',
+      // Transport
+      'Uber':               'Transport',
+      'Ola':                'Transport',
+      'Didi':               'Transport',
+      '13cabs':             'Transport',
+      'Translink':          'Transport',
+      'Queensland Rail':    'Transport',
+      'Go Card':            'Transport',
+      'Avis':               'Transport',
+      'Budget Car':         'Transport',
+      'Hertz':              'Transport',
+      'Europcar':           'Transport',
+      // Utilities
+      'Energex':            'Utilities',
+      'Ergon':              'Utilities',
+      'Origin Energy':      'Utilities',
+      'Agl':                'Utilities',
+      'Red Energy':         'Utilities',
+      'Synergy':            'Utilities',
+      'Actew':              'Utilities',
+      'Ausgrid':            'Utilities',
+      // Telecommunications
+      'Telstra':            'Telecommunications',
+      'Optus':              'Telecommunications',
+      'Vodafone':           'Telecommunications',
+      'Aussie Broadband':   'Telecommunications',
+      'Tpg':                'Telecommunications',
+      'Iinet':              'Telecommunications',
+      'Internode':          'Telecommunications',
+      'Belong':             'Telecommunications',
+      'Aldimobile':         'Telecommunications',
+      // Insurance
+      'Racq':               'Insurance',
+      'Nrma':               'Insurance',
+      'Aami':               'Insurance',
+      'Budget Direct':      'Insurance',
+      'Youi':               'Insurance',
+      'Allianz':            'Insurance',
+      'Rac':                'Insurance',
+      'Raa':                'Insurance',
+      'Suncorp':            'Insurance',
+      'Qbe':                'Insurance',
+      // Health Insurance
+      'Medibank':           'Health Insurance',
+      'Bupa':               'Health Insurance',
+      'Hcf':                'Health Insurance',
+      'Nib':                'Health Insurance',
+      // Post & Parcel
+      'Australia Post':     'Post & Parcel',
+      'Auspost':            'Post & Parcel',
+      'Toll':               'Post & Parcel',
+      'Sendle':             'Post & Parcel',
+      'Fastway':            'Post & Parcel',
+    };
+
+    // Sort by key length descending so longer (more specific) keys match first
+    const _merchantCatEntries = Object.entries(MERCHANT_CATS)
+      .sort((a, b) => b[0].length - a[0].length)
+      .map(([k, v]) => [k.toLowerCase(), v]);
+
+    function autoCategory(narrative) {
+      const raw = narrative.toLowerCase();
+
+      // BPAY context clues — checked before general patterns
+      const bpayPatterns = [
+        [/bpay.*\bato\b|bpay.*tax.*office|bpay.*payg|bpay.*bas\b/,   'Tax'],
+        [/bpay.*council|bpay.*shire|bpay.*rates/,                     'Council Rates'],
+        [/bpay.*(medibank|bupa|hcf|nib|ahm|hbf)|bpay.*health\s*(fund|insur)/, 'Health Insurance'],
+        [/bpay.*(energex|ergon|origin|agl|red\s*energy|unitywater|seqwater)/, 'Utilities'],
+        [/bpay.*water|bpay.*electricity|bpay.*gas\b/,                 'Utilities'],
+        [/bpay.*(telstra|optus|vodafone|tpg|iinet|aussie\s*broadband)/, 'Telecommunications'],
+      ];
+      for (const [re, cat] of bpayPatterns) {
+        if (re.test(raw)) return cat;
+      }
+
+      // Keyword patterns checked against the raw narrative first
+      const patterns = [
+        // Food delivery (before general Uber rule)
+        [/uber\s*eat/,                                          'Dining'],
+        [/menulog|doordash|deliveroo/,                          'Dining'],
+        // Cafes / fast food signals
+        [/\bcafe\b|\bcoffee\b|\bbakery\b|\bpastry\b/,          'Dining'],
+        [/\brestaurant\b|\bbistro\b|\bpizzeria\b|\bsushi\b/,   'Dining'],
+        // Transport
+        [/uber\s*(trip|technologies|bv)/,                      'Transport'],
+        [/linkt|e-toll|roam\s*express|citylink|eastlink/,      'Transport'],
+        [/\bparking\b|\bcar\s*park\b|\bwilson\s*park/,        'Parking'],
+        [/\brego\b|vehicle\s*registr/,                         'Registration'],
+        // Airlines & travel
+        [/qantas|virgin\s*aust|jetstar|tigerair|rex\s*airline|air\s*nz|air\s*new\s*zealand/,  'Travel'],
+        [/airbnb|booking\.com|expedia|hotels\.com|agoda|wotif/,'Accommodation'],
+        // Streaming & subscriptions (before generic shopping)
+        [/netflix|stan\.com|disney\+?|spotify|apple\s*music|binge|foxtel|youtube\s*premium|prime\s*video|paramount/,  'Entertainment'],
+        // Supermarkets
+        [/\bcoles\b|\bwoolworths\b|\baldi\b|\biga\b|\bfoodworks\b|\bdrakes\b|\bspar\b|\bharris\s*farm\b|\bcostco\b/, 'Groceries'],
+        // Fuel stations
+        [/\bampol\b|\bcaltex\b|\bshell\b|\bunited\s*petro|\bpuma\s*energy\b|\bmobil\b|\bbp\b/, 'Fuel'],
+        [/\b7.eleven\b|\bmetro\s*petro\b|\bon\s*the\s*run\b/,  'Fuel'],
+        // Telecoms
+        [/\btelstra\b|\boptus\b|\bvodafone\b|\baussie\s*broadband\b|\btpg\b|\biinet\b|\binternode\b|\bbelong\b/, 'Telecommunications'],
+        [/\baldimobile\b|\baldi\s*mobile\b/,                   'Telecommunications'],
+        // Banking fees & interest
+        [/(account|monthly|annual|dishonour|overdrawn|late\s*payment)\s*(fee|charge)/, 'Banking Fees'],
+        [/interest\s+(charge|debit)|interest\s+on\s+/,         'Banking Fees'],
+        [/\boverdraft\b/,                                       'Banking Fees'],
+        // Government / Tax
+        [/\bato\b|aust.*tax.*office|australian\s*tax/,        'Tax'],
+        [/\bpayg\b|\bbas\s*payment\b|business\s*activity\s*statement|instalment\s*notice/, 'Tax'],
+        [/\bsrovic\b|state\s*revenue\s*office|land\s*tax/,    'Tax'],
+        [/\bcentrelink\b|services\s*australia/,                'Government'],
+        [/\bqld\s*gov\b|\bnsw\s*gov\b|\bvic\s*gov\b|state\s*gov/,  'Government'],
+        // Healthcare
+        [/\bmedicare\b/,                                        'Healthcare'],
+        [/bulk\s*bill|medical\s*cent|health\s*cent|family\s*pract|general\s*pract/, 'Healthcare'],
+        [/\bdentist\b|\bdental\b/,                             'Healthcare'],
+        [/pathology|radiology|\bhospital\b/,                   'Healthcare'],
+        [/physiotherap|\bphysio\b|chiropractic|osteopath/,    'Healthcare'],
+        [/optometrist|optometry|\beye\s*care\b|\boptical\b/,  'Healthcare'],
+        [/podiatrist|podiatry|audiologist|speech\s*therap/,   'Healthcare'],
+        [/\bspecialist\b|\bclinic\b|\bmedical\b|\bhealth\s*care\b/, 'Healthcare'],
+        [/\bpharmacy\b|\bchemist\s*warehouse\b|\bpriceline\b|\bchemist\b/,  'Healthcare'],
+        // Health Insurance (before generic insurance)
+        [/\bmedibank\b|\bbupa\b|\bhcf\b|\bnib\b|\bahm\b|\bhbf\b/, 'Health Insurance'],
+        [/teachers\s*health|police\s*health|cua\s*health|frank\s*health/, 'Health Insurance'],
+        [/health\s*insurance|health\s*fund/,                  'Health Insurance'],
+        // Fitness
+        [/snap\s*fitness|anytime\s*fitness|jetts|planet\s*fitness|\bgym\b|crossfit|f45/, 'Fitness'],
+        // Education
+        [/school\s*fee|\btafe\b|university\s*fee|tuition\s*fee|college\s*fee/, 'Education'],
+        // Childcare
+        [/childcare|child\s*care|daycare|day\s*care|kindergarten|\bkindy\b/, 'Childcare'],
+        // Council rates — catch "[Council Name] Council" BPAY payments too
+        [/council\s*rates|shire\s*rates|\brates\b.*council/,  'Council Rates'],
+        [/\bcity\s*council\b|\bregional\s*council\b|\bshire\s*council\b|\bcouncil\b.*\brates\b/, 'Council Rates'],
+        [/\bbrisbane\s*city\b|\bsunshine\s*coast\s*council\b|\bgold\s*coast\s*council\b|\bmoreton\s*bay\b/, 'Council Rates'],
+        [/\bipswich\s*city\b|\blockyer\s*valley\b|\bsomerset\s*region\b|\bnoosa\s*council\b|\bnsc\W+rate/, 'Council Rates'],
+        // Insurance (catch-all after specific insurers)
+        [/\binsurance\b|\bracq\b|\bnrma\b|\baami\b|\byoui\b|\ballianz\b|\bsuncorp\b/, 'Insurance'],
+        // Superannuation
+        [/superannuation|super\s*fund|\bhesta\b|\baustralian\s*super\b|\brest\s*super\b|\bsunsuper\b|\baware\s*super\b/, 'Superannuation'],
+        // Utilities
+        [/energex|ergon\s*energy|origin\s*energy|\bagl\b|red\s*energy|synergy|alinta/, 'Utilities'],
+        [/electricity|gas\s*bill|water\s*bill|\bunitywater\b|\bseqwater\b/,            'Utilities'],
+        // Pets (before council rates to catch NSC Anim first)
+        [/\bnsc\W+anim/,                                              'Pets'],
+        [/\bvet\b|\bveterinar|\bpet\s*barn|\bpetbarn\b|\bpetsmart\b|\bpawsome\b/, 'Pets'],
+        [/\bpet\s*insurance\b|\banimal\s*hospit|\banimal\s*clinic\b/, 'Pets'],
+        // Car Care
+        [/\bgarage\b|\bauto\s*service\b|\bcar\s*service\b|\btyres?\b|\bmuffler\b|\bsmash\s*repair/, 'Car Care'],
+        [/\bmechan|\bautomotive\b|\bcar\s*wash\b|\bdetailing\b/,  'Car Care'],
+        // Renovations
+        [/\bbenchmark\b|bunnings|mitre\s*10|total\s*tools|stratco|beaumont\s*tiles/, 'Renovations'],
+        [/renovation|\btiling\b|\bplumbing\b|\belectrician\b|\bpainting\b|\bbricklayer\b/, 'Renovations'],
+        [/\bcarpet\b|\bflooring\b|\bkitchen\s*design\b|\bbathroom\s*design\b/, 'Renovations'],
+        // Post
+        [/australia\s*post|\bauspost\b/,                       'Post & Parcel'],
+      ];
+
+      for (const [re, cat] of patterns) {
+        if (re.test(raw)) return cat;
+      }
+
+      // Fall back to merchant name lookup
+      const lower = cleanMerchant(narrative).toLowerCase();
+      if (!lower) return null;
+      for (const [key, cat] of _merchantCatEntries) {
+        if (lower === key || lower.startsWith(key + ' ')) return cat;
+      }
+
+      // Check AI-classified cache
+      const cached = getMerchantCatCache();
+      const merchantKey = cleanMerchant(narrative);
+      if (cached[merchantKey]) return cached[merchantKey];
+
+      return null;
+    }
+
+    function getMerchantCatCache() {
+      try { return JSON.parse(localStorage.getItem('budget_merchant_cats') || '{}'); } catch { return {}; }
+    }
+    function getManualCats() {
+      try { return JSON.parse(localStorage.getItem('budget_manual_cats') || '{}'); } catch { return {}; }
+    }
+    function setCatOverride(narrative, cat) {
+      const key = cleanMerchant(narrative) || narrative.trim().slice(0, 50);
+      const overrides = getManualCats();
+      if (!cat || cat === 'Uncategorised') delete overrides[key];
+      else overrides[key] = cat;
+      localStorage.setItem('budget_manual_cats', JSON.stringify(overrides));
+      renderBudget();
+    }
+    function openCatDropdown(el) {
+      const narrative = el.dataset.narrative;
+      document.querySelectorAll('.cat-dropdown').forEach(d => d.remove());
+      const currentCat = effectiveCat(budgetTransactions.find(t => t.narrative === narrative) || { narrative, category: '' });
+      const dropdown = document.createElement('div');
+      dropdown.className = 'cat-dropdown';
+      dropdown.style.cssText = 'position:fixed;z-index:9999;background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.35);padding:4px;max-height:280px;overflow-y:auto;width:170px;font-family:inherit;';
+      Object.entries(CAT_COLORS).forEach(([cat, color]) => {
+        const item = document.createElement('div');
+        item.style.cssText = `padding:6px 10px;cursor:pointer;border-radius:4px;font-size:12px;color:${color};font-weight:${cat === currentCat ? '700' : '400'};display:flex;align-items:center;gap:6px`;
+        item.innerHTML = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>${cat}${cat === currentCat ? ' ✓' : ''}`;
+        item.onmouseenter = () => item.style.background = 'var(--bg-secondary)';
+        item.onmouseleave = () => item.style.background = '';
+        item.onclick = (e) => { e.stopPropagation(); setCatOverride(narrative, cat); dropdown.remove(); };
+        dropdown.appendChild(item);
+      });
+      const rect = el.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      dropdown.style.left = Math.min(rect.left, window.innerWidth - 180) + 'px';
+      dropdown.style.top = spaceBelow > 200 ? (rect.bottom + 4) + 'px' : (rect.top - 4) + 'px';
+      if (spaceBelow <= 200) dropdown.style.transform = 'translateY(-100%)';
+      document.body.appendChild(dropdown);
+      setTimeout(() => document.addEventListener('click', function c() { dropdown.remove(); document.removeEventListener('click', c); }, { once: true }), 0);
+    }
+
+    async function classifyUnknownMerchants() {
+      const apiKey = localStorage.getItem('budget_api_key');
+      if (!apiKey) { alert('Enter your Anthropic API key in Settings first.'); return; }
+
+      const cache = getMerchantCatCache();
+      const unknown = new Set();
+      budgetTransactions.forEach(t => {
+        if (t.debit <= 0) return;
+        const name = cleanMerchant(t.narrative);
+        if (!name || cache[name]) return;
+        if (t.category && t.category !== 'Uncategorised') return;
+        if (autoCategory(t.narrative)) return;  // already handled by static rules
+        unknown.add(name);
+      });
+
+      function setClassifyStatus(msg) {
+        showStatus(msg);
+        const el = document.getElementById('classifyStatus');
+        if (el) el.textContent = msg;
+      }
+
+      if (!unknown.size) { setClassifyStatus('✓ All merchants already categorised'); return; }
+
+      const names = [...unknown];
+      const allCats = Object.keys(CAT_COLORS).filter(c => c !== 'Uncategorised').sort().join(', ');
+      const BATCH = 40;
+      let done = 0;
+
+      for (let i = 0; i < names.length; i += BATCH) {
+        const batch = names.slice(i, i + BATCH);
+        setClassifyStatus(`Classifying ${i + 1}–${Math.min(i + BATCH, names.length)} of ${names.length}…`);
+        try {
+          const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'content-type': 'application/json',
+              'anthropic-dangerous-allow-browser': 'true',
+            },
+            body: JSON.stringify({
+              model: 'claude-haiku-4-5-20251001',
+              max_tokens: 1024,
+              messages: [{ role: 'user', content:
+                `Categorise these Australian bank transaction merchant names. Use ONLY one of: ${allCats}.\n\nMerchants:\n${batch.map((m, j) => `${j+1}. ${m}`).join('\n')}\n\nReply with ONLY a JSON object like {"Merchant Name": "Category"}. No explanation.`
+              }]
+            })
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          const text = data.content[0].text;
+          const match = text.match(/\{[\s\S]*\}/);
+          if (match) {
+            const result = JSON.parse(match[0]);
+            Object.assign(cache, result);
+            done += Object.keys(result).length;
+          }
+        } catch (e) {
+          setClassifyStatus(`API error: ${e.message}`); return;
+        }
+      }
+
+      localStorage.setItem('budget_merchant_cats', JSON.stringify(cache));
+      setClassifyStatus(`✓ Classified ${done} merchants`);
+      renderBudget();
+    }
+
+    function effectiveCat(t) {
+      const merchantKey = cleanMerchant(t.narrative) || t.narrative.trim().slice(0, 50);
+      const manual = getManualCats();
+      if (manual[merchantKey]) return manual[merchantKey];
+      const auto = autoCategory(t.narrative);
+      if (auto) return auto;
+      if (t.category && t.category !== 'Uncategorised' && CAT_COLORS[t.category]) return t.category;
+      return 'Uncategorised';
+    }
+
+    const CAT_COLORS = {
+      'Groceries':        '#16a34a',
+      'Dining':           '#f97316',
+      'Entertainment':    '#8b5cf6',
+      'Shopping':         '#3b82f6',
+      'Fuel':             '#ca8a04',
+      'Transport':        '#06b6d4',
+      'Utilities':        '#64748b',
+      'Telecommunications':'#0d9488',
+      'Insurance':        '#dc2626',
+      'Health Insurance': '#db2777',
+      'Healthcare':       '#ec4899',
+      'Fitness':          '#84cc16',
+      'Education':        '#6366f1',
+      'Childcare':        '#f59e0b',
+      'Travel':           '#0ea5e9',
+      'Accommodation':    '#d97706',
+      'Superannuation':   '#7c3aed',
+      'Government':       '#475569',
+      'Tax':              '#b45309',
+      'Banking Fees':     '#6b7280',
+      'Post & Parcel':    '#78716c',
+      'Parking':          '#94a3b8',
+      'Registration':     '#a3a3a3',
+      'Council Rates':    '#065f46',
+      'Renovations':      '#b45309',
+      'Car Care':         '#0369a1',
+      'Pets':             '#7c3aed',
+      'Other':            '#9ca3af',
+      'Uncategorised':    '#d1d5db',
+    };
+    function catColor(cat) { return CAT_COLORS[cat] || '#9ca3af'; }
+    let budgetSelectedYear = null;
+    let budgetSelectedMonth = null;
+    let budgetSelectedCategory = null;
+    let budgetSelectedIncomeSource = null;
+    let budgetSelectedAccount = null;
+    let budgetSelectedTab = 'overview';
+
+    try { budgetLimits = JSON.parse(localStorage.getItem('budget_limits') || '{}'); } catch { budgetLimits = {}; }
+
+    const statusEl = document.getElementById('status');
+    function showStatus(msg) {
+      statusEl.textContent = msg;
+      statusEl.classList.add('visible');
+      setTimeout(() => statusEl.classList.remove('visible'), 3000);
+    }
+
+    function saveBudgetLimits() {
+      localStorage.setItem('budget_limits', JSON.stringify(budgetLimits));
+    }
+
+    // ===== INDEXEDDB =====
+    function openDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open('budget-app', 1);
+        req.onupgradeneeded = e => {
+          const db = e.target.result;
+          db.createObjectStore('handles');
+          db.createObjectStore('transactions', { autoIncrement: true });
+          db.createObjectStore('imported_files');
+        };
+        req.onsuccess = e => resolve(e.target.result);
+        req.onerror = e => reject(e.target.error);
+      });
+    }
+
+    async function clearSavedHandle() {
+      try {
+        const db = await openDB();
+        await new Promise((res, rej) => {
+          const tx = db.transaction('handles', 'readwrite');
+          tx.objectStore('handles').delete('folder');
+          tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+        });
+        budgetFolderHandle = null;
+      } catch(e) { console.warn('Could not clear folder handle', e); }
+    }
+
+    async function saveHandle(handle) {
+      try {
+        const db = await openDB();
+        await new Promise((res, rej) => {
+          const tx = db.transaction('handles', 'readwrite');
+          tx.objectStore('handles').put(handle, 'folder');
+          tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+        });
+      } catch(e) { console.warn('Could not persist folder handle', e); }
+    }
+
+    async function getSavedHandle() {
+      try {
+        const db = await openDB();
+        return await new Promise((res, rej) => {
+          const tx = db.transaction('handles', 'readonly');
+          const req = tx.objectStore('handles').get('folder');
+          req.onsuccess = e => res(e.target.result);
+          req.onerror = e => rej(e.target.error);
+        });
+      } catch { return null; }
+    }
+
+    async function storeTransactions(txs, filename) {
+      const db = await openDB();
+      await new Promise((res, rej) => {
+        const tx = db.transaction(['transactions', 'imported_files'], 'readwrite');
+        txs.forEach(t => tx.objectStore('transactions').add(t));
+        tx.objectStore('imported_files').put({ filename, importedAt: new Date(), count: txs.length }, filename);
+        tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+      });
+    }
+
+    async function loadAllTransactions() {
+      try {
+        const db = await openDB();
+        return await new Promise((res, rej) => {
+          const tx = db.transaction('transactions', 'readonly');
+          const req = tx.objectStore('transactions').getAll();
+          req.onsuccess = e => res(e.target.result);
+          req.onerror = e => rej(e.target.error);
+        });
+      } catch { return []; }
+    }
+
+    async function getImportedFiles() {
+      try {
+        const db = await openDB();
+        return await new Promise((res, rej) => {
+          const tx = db.transaction('imported_files', 'readonly');
+          const req = tx.objectStore('imported_files').getAll();
+          req.onsuccess = e => {
+            const map = {};
+            e.target.result.forEach(r => map[r.filename] = r);
+            res(map);
+          };
+          req.onerror = e => rej(e.target.error);
+        });
+      } catch { return {}; }
+    }
+
+    // ===== IMPORT =====
+    async function showChangeFolderBtn(show) {
+      document.getElementById('changeFolderBtn').style.display = show ? '' : 'none';
+    }
+
+    async function doImport() {
+      if (window.showDirectoryPicker) {
+        const saved = await getSavedHandle();
+        if (saved) {
+          try {
+            const perm = await saved.requestPermission({ mode: 'read' });
+            if (perm === 'granted') {
+              budgetFolderHandle = saved;
+              showChangeFolderBtn(true);
+              await importNewFiles();
+            } else {
+              showStatus('Access denied — click Import again to allow folder access');
+            }
+          } catch(e) {
+            showStatus('Error: ' + e.message);
+          }
+          return;
+        }
+        try {
+          const handle = await window.showDirectoryPicker({ id: 'budget', mode: 'read' });
+          await saveHandle(handle);
+          budgetFolderHandle = handle;
+          showChangeFolderBtn(true);
+          await importNewFiles();
+          return;
+        } catch(e) {
+          if (e.name === 'AbortError') return;
+          // API blocked (e.g. Brave shields) — fall through to file input
+        }
+      }
+      document.getElementById('folderInput').click();
+    }
+
+    async function changeFolder() {
+      await clearSavedHandle();
+      showChangeFolderBtn(false);
+      await doImport();
+    }
+
+    async function importFromFileList(files) {
+      // webkitdirectory recurses into sub-folders; keep top-level files only
+      const csvFiles = Array.from(files).filter(f =>
+        f.webkitRelativePath.split('/').length === 2 && /^Data_Export_.*\.csv$/i.test(f.name));
+      if (!csvFiles.length) { showStatus('No Data_Export_*.csv files found'); return; }
+      const imported = await getImportedFiles();
+      const newFiles = csvFiles.filter(f => !imported[f.name]).sort((a, b) => a.name.localeCompare(b.name));
+      if (!newFiles.length) {
+        showStatus(`All ${csvFiles.length} file${csvFiles.length > 1 ? 's' : ''} already imported`);
+        if (budgetTransactions.length) renderBudget();
+        return;
+      }
+      let totalNew = 0;
+      for (const f of newFiles) {
+        const text = await f.text();
+        const txs = parseCSV(text);
+        if (txs.length) { await storeTransactions(txs, f.name); totalNew += txs.length; }
+      }
+      budgetTransactions = (await loadAllTransactions()).filter(t => !EXCLUDED_ACCOUNTS.has(t.account));
+      const years = [...new Set(budgetTransactions.map(t => t.month.split('-')[0]))].sort();
+      if (!budgetSelectedYear || !years.includes(budgetSelectedYear)) {
+        budgetSelectedYear = years[years.length - 1] || null;
+        budgetSelectedMonth = null;
+      }
+      showStatus(`Imported ${totalNew} new transaction${totalNew > 1 ? 's' : ''} from ${newFiles.length} file${newFiles.length > 1 ? 's' : ''}`);
+      renderBudget();
+    }
+
+    async function importNewFiles(silent = false) {
+      if (!budgetFolderHandle) return;
+      const allFiles = [];
+      for await (const [name, handle] of budgetFolderHandle.entries()) {
+        if (handle.kind === 'file' && /^Data_Export_.*\.csv$/i.test(name)) allFiles.push({ name, handle });
+      }
+      if (!allFiles.length) { if (!silent) showStatus('No Data_Export_*.csv files found'); return; }
+
+      const imported = await getImportedFiles();
+      const newFiles = allFiles.filter(f => !imported[f.name]).sort((a, b) => a.name.localeCompare(b.name));
+
+      if (!newFiles.length) {
+        if (!silent) showStatus(`All ${allFiles.length} file${allFiles.length > 1 ? 's' : ''} already imported`);
+        if (!silent && budgetTransactions.length) renderBudget();
+        return;
+      }
+
+      let totalNew = 0;
+      for (const f of newFiles) {
+        const text = await (await f.handle.getFile()).text();
+        const txs = parseCSV(text);
+        if (txs.length) { await storeTransactions(txs, f.name); totalNew += txs.length; }
+      }
+
+      budgetTransactions = (await loadAllTransactions()).filter(t => !EXCLUDED_ACCOUNTS.has(t.account));
+      const months = [...new Set(budgetTransactions.map(t => t.month))].sort();
+      if (!budgetSelectedMonth || !months.includes(budgetSelectedMonth)) {
+        budgetSelectedMonth = months[months.length - 1] || null;
+      }
+      const years = [...new Set(budgetTransactions.map(t => t.month.split('-')[0]))].sort();
+      if (!budgetSelectedYear || !years.includes(budgetSelectedYear)) {
+        budgetSelectedYear = years[years.length - 1] || null;
+        budgetSelectedMonth = null;
+      }
+      showStatus(`Imported ${totalNew} new transaction${totalNew > 1 ? 's' : ''} from ${newFiles.length} file${newFiles.length > 1 ? 's' : ''}`);
+      renderBudget();
+    }
+
+    async function autoCheckNewFiles() {
+      const handle = budgetFolderHandle || await getSavedHandle();
+      if (!handle) return;
+      const perm = await handle.queryPermission({ mode: 'read' });
+      if (perm !== 'granted') return;
+      budgetFolderHandle = handle;
+      await importNewFiles(true);
+    }
+
+    // ===== CSV PARSING =====
+    function parseCSVRow(line) {
+      const out = []; let cur = '', inQ = false;
+      for (const c of line) {
+        if (c === '"') inQ = !inQ;
+        else if (c === ',' && !inQ) { out.push(cur); cur = ''; }
+        else cur += c;
+      }
+      out.push(cur);
+      return out;
+    }
+
+    function parseCSV(text) {
+      const lines = text.replace(/^﻿/, '').trim().split(/\r?\n/);
+      if (lines.length < 2) return [];
+      const headers = parseCSVRow(lines[0]).map(h => h.trim());
+      const out = [];
+      for (let i = 1; i < lines.length; i++) {
+        const vals = parseCSVRow(lines[i]);
+        if (vals.length < 3) continue;
+        const r = {};
+        headers.forEach((h, idx) => r[h] = (vals[idx] || '').trim());
+        const debit = parseFloat(r['Debit Amount']) || 0;
+        const credit = parseFloat(r['Credit Amount']) || 0;
+        const dateStr = r['Date'] || '';
+        const m = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (!m) continue;
+        const date = new Date(+m[3], +m[2] - 1, +m[1]);
+        const month = `${m[3]}-${m[2].padStart(2, '0')}`;
+        out.push({
+          account: r['Bank Account'] || '',
+          dateStr, date, month,
+          narrative: r['Narrative'] || '',
+          debit, credit,
+          balance: parseFloat(r['Balance']) || 0,
+          category: (r['Categories'] || 'Uncategorised').trim() || 'Uncategorised',
+        });
+      }
+      return out;
+    }
+
+    // ===== ANALYSIS =====
+    function filtered() {
+      let txs = budgetTransactions;
+      if (budgetSelectedAccount) txs = txs.filter(t => t.account === budgetSelectedAccount);
+      if (budgetSelectedMonth) return txs.filter(t => t.month === budgetSelectedMonth);
+      if (budgetSelectedYear) return txs.filter(t => t.month.startsWith(budgetSelectedYear));
+      return txs;
+    }
+
+    function allMonths() {
+      const months = [...new Set(budgetTransactions.map(t => t.month))].sort().reverse();
+      return budgetSelectedYear ? months.filter(m => m.startsWith(budgetSelectedYear)) : months;
+    }
+
+    function allYears() {
+      return [...new Set(budgetTransactions.map(t => t.month.split('-')[0]))].sort().reverse();
+    }
+
+    function fmtMonth(ym) {
+      const [y, mo] = ym.split('-');
+      return new Date(+y, +mo - 1, 1).toLocaleString('default', { month: 'short', year: 'numeric' });
+    }
+
+    function fmtAUD(n) {
+      return '$' + Math.abs(n).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function catSpending(txs) {
+      const m = {};
+      txs.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); m[c] = (m[c] || 0) + t.debit; } });
+      return Object.entries(m).sort((a, b) => b[1] - a[1]);
+    }
+
+    function avgMonthlyCatSpending() {
+      let base = budgetTransactions;
+      if (budgetSelectedAccount) base = base.filter(t => t.account === budgetSelectedAccount);
+      const numMonths = new Set(base.map(t => t.month)).size || 1;
+      const totals = {};
+      base.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); totals[c] = (totals[c] || 0) + t.debit; } });
+      const avgs = {};
+      for (const [cat, total] of Object.entries(totals)) avgs[cat] = total / numMonths;
+      return avgs;
+    }
+
+    function cleanMerchant(n) {
+      return n
+        // card / payment method prefixes
+        .replace(/^(visa\s+(purchase|debit\s+purchase|credit\s+purchase)|mc\s+purchase|mastercard\s+purchase)\s*/i, '')
+        .replace(/^(eftpos\s+(purchase\s+)?|tap\s+and\s+pay\s+|contactless\s+purchase\s+)/i, '')
+        .replace(/^(recurring\s+payment\s+to\s+|internet\s+purchase\s+|online\s+purchase\s+)/i, '')
+        .replace(/^(osko\s+(payment\s+to\s+)?|npp\s+(credit|debit)\s+)/i, '')
+        .replace(/^(paypal|sq)\s*\*\s*/i, '')
+        .replace(/^direct\s+debit\s+/i, '')
+        .replace(/^bpay\s+/i, '')
+        .replace(/^(atm\s+withdrawal\s+|atm\s+)/i, '')
+        // legal suffixes
+        .replace(/\b(pty\s+ltd|pty|ltd|p\/l|inc|co)\b\.?/gi, '')
+        // domain suffixes (e.g. NETFLIX.COM, STAN.COM.AU)
+        .replace(/\.(com\.au|com|net\.au|net|org\.au|org|au)\b/gi, '')
+        // standalone store/ref numbers (3+ digits)
+        .replace(/\s+\d{3,}(\s|$)/g, ' ')
+        // Australian states and country
+        .replace(/\b(aus|aust|australia|qld|nsw|vic|sa|wa|tas|act|nt)\b/gi, '')
+        .replace(/[^a-zA-Z0-9\s&'\-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase()
+        .replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function topMerchants(txs, n = 20) {
+      const m = {};
+      const SKIP = new Set(['Paypal', 'Sq', 'Square', 'Osko', 'Bpay']);
+      txs.forEach(t => {
+        if (t.debit > 0) {
+          const key = cleanMerchant(t.narrative);
+          if (key && !SKIP.has(key)) {
+            if (!m[key]) m[key] = { amt: 0, narrative: t.narrative };
+            m[key].amt += t.debit;
+          }
+        }
+      });
+      return Object.entries(m)
+        .map(([name, { amt, narrative }]) => [name, amt, autoCategory(narrative) || 'Other'])
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, n);
+    }
+
+    function monthlyTotals() {
+      const m = {};
+      budgetTransactions.forEach(t => {
+        if (!m[t.month]) m[t.month] = { inc: 0, exp: 0 };
+        m[t.month].inc += t.credit;
+        m[t.month].exp += t.debit;
+      });
+      return Object.entries(m).sort((a, b) => a[0].localeCompare(b[0]));
+    }
+
+    function annualTotals() {
+      const m = {};
+      budgetTransactions.forEach(t => {
+        const year = t.month.split('-')[0];
+        if (!m[year]) m[year] = { inc: 0, exp: 0 };
+        m[year].inc += t.credit;
+        m[year].exp += t.debit;
+      });
+      return Object.entries(m).sort((a, b) => a[0].localeCompare(b[0]));
+    }
+
+    function balanceChartSVG(txs) {
+      const sorted = txs.slice().sort((a, b) => a.date - b.date).filter(t => t.balance !== 0 || t.debit || t.credit);
+      if (sorted.length < 2) return '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">Not enough data</div>';
+
+      const acc = sorted[0]?.account || null;
+
+      const W = 800, H = 130, padL = 62, padR = 16, padT = 12, padB = 28;
+      const cW = W - padL - padR, cH = H - padT - padB;
+
+      const minBal = Math.min(...sorted.map(t => t.balance));
+      const maxBal = Math.max(...sorted.map(t => t.balance));
+      const balRange = maxBal - minBal || 1;
+      const minTs = sorted[0].date.getTime();
+      const maxTs = sorted[sorted.length - 1].date.getTime();
+      const tsRange = maxTs - minTs || 1;
+
+      const tx = d => padL + ((d.getTime() - minTs) / tsRange) * cW;
+      const ty = b => padT + cH - ((b - minBal) / balRange) * cH;
+
+      // grid + y labels
+      const yTicks = 3;
+      let grid = '';
+      for (let i = 0; i <= yTicks; i++) {
+        const b = minBal + (balRange * i / yTicks);
+        const y = ty(b);
+        grid += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="#eeeee9" stroke-width="1"/>`;
+        grid += `<text x="${padL - 5}" y="${y + 4}" text-anchor="end" font-size="9" fill="#8c8c8a">$${Math.round(b).toLocaleString('en-AU')}</text>`;
+      }
+
+      // zero line
+      const zeroLine = (minBal < 0 && maxBal > 0)
+        ? `<line x1="${padL}" y1="${ty(0)}" x2="${W - padR}" y2="${ty(0)}" stroke="#ef4444" stroke-width="1" stroke-dasharray="4,3" opacity="0.5"/>`
+        : '';
+
+      // x-axis date labels
+      const xTicks = Math.min(6, sorted.length);
+      let xLabels = '';
+      for (let i = 0; i < xTicks; i++) {
+        const t = sorted[Math.round((sorted.length - 1) * i / (xTicks - 1))];
+        const x = tx(t.date);
+        const label = t.date.toLocaleDateString('en-AU', { month: 'short', year: '2-digit' });
+        xLabels += `<text x="${x}" y="${H - 4}" text-anchor="middle" font-size="9" fill="#8c8c8a">${label}</text>`;
+      }
+
+      const pts = sorted.map(t => `${tx(t.date).toFixed(1)},${ty(t.balance).toFixed(1)}`).join(' ');
+      const lines = `<polyline points="${pts}" fill="none" stroke="${acctColor(acc)}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+      const legend = '';
+
+      return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+        ${grid}${zeroLine}${lines}${xLabels}
+        ${legend ? `<text x="${padL}" y="10" font-size="9" font-family="Inter,sans-serif">${legend}</text>` : ''}
+      </svg>`;
+    }
+
+    function detectRecurring(allTxs) {
+      const FREQS = [
+        { label: 'Weekly',      min: 5,   max: 10,  minCount: 6, checkDayOfMonth: false, maxCv: 0.30 },
+        { label: 'Fortnightly', min: 11,  max: 20,  minCount: 6, checkDayOfMonth: false, maxCv: 0.30 },
+        { label: 'Monthly',     min: 21,  max: 45,  minCount: 6, checkDayOfMonth: false, maxCv: 0.30 },
+        { label: 'Bimonthly',   min: 46,  max: 74,  minCount: 4, checkDayOfMonth: true,  maxCv: 0.20 },
+        { label: 'Quarterly',   min: 75,  max: 110, minCount: 4, checkDayOfMonth: true,  maxCv: 0.15 },
+        { label: 'Annual',      min: 330, max: 400, minCount: 3, checkDayOfMonth: true,  maxCv: 0.15 },
+      ];
+
+      function normalizeNarrative(n) {
+        const s = n
+          .toLowerCase()
+          .replace(/^paypal\s*\*\s*/g, '')               // strip PAYPAL * prefix
+          .replace(/^direct\s*debit\s*/g, '')            // strip DIRECT DEBIT prefix
+          .replace(/^bpay\s+/g, '')                      // strip BPAY prefix
+          .replace(/\d{1,2}\/\d{1,2}(\/\d{2,4})?/g, '') // strip embedded dates
+          .replace(/\b[a-z0-9]*\d[a-z0-9]{3,}\b/g, '')  // strip ref codes with digits
+          .replace(/\b\d+\b/g, '')                        // strip standalone numbers
+          .replace(/[^a-z\s]/g, ' ')                      // strip special chars
+          .replace(/\s+/g, ' ').trim();
+        // Keep only words ≥4 chars and sort — makes order and short noise words irrelevant
+        return s.split(' ').filter(w => w.length >= 4).sort().join(' ');
+      }
+
+      const byName = {};
+      allTxs.forEach(t => {
+        if (t.debit <= 0) return;
+        const key = normalizeNarrative(t.narrative);
+        if (!key) return;
+        if (!byName[key]) byName[key] = [];
+        byName[key].push(t);
+      });
+
+      const results = [];
+      for (const [name, txs] of Object.entries(byName)) {
+        if (txs.length < 3) continue;
+        const sorted = txs.slice().sort((a, b) => a.date - b.date);
+
+        // Deduplicate by month — multiple charges in the same month count as one billing event
+        const byMonth = {};
+        sorted.forEach(t => { byMonth[t.month] = t; });
+        const deduped = Object.values(byMonth).sort((a, b) => a.date - b.date);
+        if (deduped.length < 3) continue;
+
+        const gaps = [];
+        for (let i = 1; i < deduped.length; i++)
+          gaps.push((deduped[i].date - deduped[i - 1].date) / 86400000);
+
+        const avgGap = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+        const stddev = Math.sqrt(gaps.reduce((s, g) => s + (g - avgGap) ** 2, 0) / gaps.length);
+        const cv = stddev / avgGap;
+
+        const freq = FREQS.find(f => avgGap >= f.min && avgGap <= f.max);
+        if (!freq) continue;
+        if (cv > freq.maxCv) continue;
+        if (deduped.length < freq.minCount) continue;
+
+        if (freq.checkDayOfMonth) {
+          const days = deduped.map(t => t.date.getDate());
+          const avgDay = days.reduce((s, d) => s + d, 0) / days.length;
+          const dayStddev = Math.sqrt(days.reduce((s, d) => s + (d - avgDay) ** 2, 0) / days.length);
+          if (dayStddev > 7) continue;
+        }
+
+        const amounts = deduped.map(t => t.debit);
+        const avgAmt = amounts.reduce((s, a) => s + a, 0) / amounts.length;
+        const amtStddev = Math.sqrt(amounts.reduce((s, a) => s + (a - avgAmt) ** 2, 0) / amounts.length);
+        const amtCv = amtStddev / avgAmt;
+        if (amtCv > 0.25) continue;
+
+        const last = deduped[deduped.length - 1];
+        results.push({ name: last.narrative, count: deduped.length, avgAmt, lastDate: last.dateStr, category: effectiveCat(last), freq: freq.label });
+      }
+      return results.sort((a, b) => b.avgAmt - a.avgAmt);
+    }
+
+    // ===== RENDER =====
+    async function renderBudget() {
+      if (!budgetTransactions.length) {
+        document.getElementById('emptyState').style.display = '';
+        document.getElementById('mainContent').style.display = 'none';
+        document.getElementById('stickyBar').style.display = 'none';
+        return;
+      }
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('mainContent').style.display = '';
+      document.getElementById('stickyBar').style.display = '';
+
+      const txs = filtered();
+      const months = allMonths();
+      const years = allYears();
+      const totalInc = txs.reduce((s, t) => s + t.credit, 0);
+      const totalExp = txs.reduce((s, t) => s + t.debit, 0);
+      const net = totalInc - totalExp;
+
+      const allAccounts = [...new Set(budgetTransactions.map(t => t.account))].filter(Boolean).sort();
+      const acctSel = allAccounts.length > 1 ? `<div class="budget-month-selector" style="margin-bottom:8px">
+        <span style="font-size:11px;color:var(--text-muted);margin-right:6px;font-weight:500">Account:</span>
+        <button class="budget-month-btn${!budgetSelectedAccount ? ' active' : ''}" onclick="selectAccount(null)">All accounts</button>
+        ${allAccounts.map(a => { const esc = a.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); return `<button class="budget-month-btn${a === budgetSelectedAccount ? ' active' : ''}" onclick="selectAccount('${esc}')">${acctName(a)}</button>`; }).join('')}
+      </div>` : '';
+
+      const yearSel = `<div class="budget-month-selector" style="margin-bottom:8px">
+        ${years.map(y => `<button class="budget-month-btn${y === budgetSelectedYear && !budgetSelectedMonth ? ' active' : ''}" onclick="selectYear('${y}')">${y}</button>`).join('')}
+        <button class="budget-month-btn${!budgetSelectedYear && !budgetSelectedMonth ? ' active' : ''}" onclick="selectYear(null)">All time</button>
+      </div>`;
+
+      const monthSel = budgetSelectedYear ? `<div class="budget-month-selector">
+        ${months.map(m => `<button class="budget-month-btn${m === budgetSelectedMonth ? ' active' : ''}" onclick="selectMonth('${m}')">${fmtMonth(m)}</button>`).join('')}
+        <button class="budget-month-btn${budgetSelectedYear && !budgetSelectedMonth ? ' active' : ''}" onclick="selectMonth(null)">All ${budgetSelectedYear}</button>
+      </div>` : '';
+
+      const cards = `<div class="budget-summary-cards">
+        <div class="budget-card"><div class="budget-card-label">Income</div><div class="budget-card-value income">${fmtAUD(totalInc)}</div></div>
+        <div class="budget-card"><div class="budget-card-label">Expenses</div><div class="budget-card-value expense">${fmtAUD(totalExp)}</div></div>
+        <div class="budget-card"><div class="budget-card-label">Net</div><div class="budget-card-value ${net >= 0 ? 'income' : 'expense'}">${net >= 0 ? '+' : '−'}${fmtAUD(net)}</div></div>
+        <div class="budget-card"><div class="budget-card-label">Transactions</div><div class="budget-card-value">${txs.length}</div></div>
+      </div>`;
+
+      const cats = catSpending(txs);
+      const maxCat = cats[0]?.[1] || 1;
+      const avgCat = budgetSelectedMonth ? avgMonthlyCatSpending() : null;
+      const catRows = cats.map(([cat, amt]) => {
+        const lim = budgetLimits[cat];
+        const over = lim && amt > lim;
+        const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const isSelected = budgetSelectedCategory === cat;
+        const avg = avgCat?.[cat];
+        const pct = avg ? Math.round((amt - avg) / avg * 100) : null;
+        const vsAvg = avg != null
+          ? `<div style="flex:0 0 90px;text-align:right;font-size:11px;color:${pct > 10 ? '#ef4444' : pct < -10 ? '#22c55e' : 'var(--text-muted)'}">
+              ${pct > 0 ? '↑' : pct < 0 ? '↓' : '≈'}${Math.abs(pct)}% vs avg
+            </div>`
+          : '<div style="flex:0 0 90px"></div>';
+        const color = catColor(cat);
+        return `<div class="budget-bar-row" onclick="selectCategory('${esc}')" style="cursor:pointer;border-left:3px solid ${isSelected ? color : 'transparent'};padding-left:${isSelected ? '13px' : '0'}${isSelected ? ';background:var(--bg-secondary);margin:0 -16px;padding:6px 16px 6px 13px;border-radius:4px' : ''}">
+          <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div>
+          <div class="budget-bar-label" title="${cat}" style="font-weight:${isSelected ? '600' : '400'}">${cat}</div>
+          <div class="budget-bar-wrap"><div class="budget-bar${over ? ' over' : ''}" style="width:${(amt / maxCat) * 100}%;background:${over ? '#ef4444' : color}"></div></div>
+          <div class="budget-bar-amount">${fmtAUD(amt)}</div>
+          <div class="budget-bar-extra">${lim
+            ? `<span class="${over ? 'over' : 'under'}">${over ? '⚠ ' : ''}/ ${fmtAUD(lim)}</span>`
+            : `<button class="set-limit-btn" onclick="event.stopPropagation();setLimit('${esc}')">Set limit</button>`
+          }</div>
+          ${avgCat ? vsAvg : ''}
+        </div>`;
+      }).join('');
+      const catPanel = sec('cat', 'Spending by category', `<div class="budget-panel-box">${catRows || noData()}</div>`);
+
+      // Income sources breakdown for overview comparison
+      const incSrc = {};
+      txs.filter(t => t.credit > 0).forEach(t => {
+        const key = cleanMerchant(t.narrative) || t.narrative.trim().slice(0, 35);
+        if (key) incSrc[key] = (incSrc[key] || 0) + t.credit;
+      });
+      const incSrcList = Object.entries(incSrc).sort((a, b) => b[1] - a[1]).slice(0, 20);
+      const maxIncSrc = incSrcList[0]?.[1] || 1;
+      const incSrcRows = incSrcList.map(([name, amt]) => {
+        const esc = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const isSel = budgetSelectedIncomeSource === name;
+        return `<div class="budget-bar-row" onclick="selectIncomeSource('${esc}')" style="cursor:pointer${isSel ? ';background:var(--bg-secondary);margin:0 -16px;padding:4px 16px;border-radius:4px;border-left:3px solid #16a34a' : ''}">
+          <div class="budget-bar-label" title="${name}" style="font-weight:${isSel ? '600' : '400'}">${name}</div>
+          <div class="budget-bar-wrap"><div class="budget-bar" style="width:${(amt/maxIncSrc)*100}%;background:#16a34a"></div></div>
+          <div class="budget-bar-amount" style="color:#16a34a">+${fmtAUD(amt)}</div>
+        </div>`;
+      }).join('');
+
+      // Simple outgoings rows (no limit buttons, just name/bar/amount)
+      const outRows = cats.map(([cat, amt]) => {
+        const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const color = catColor(cat);
+        const isSel = budgetSelectedCategory === cat;
+        return `<div class="budget-bar-row" onclick="selectOverviewCategory('${esc}')" style="cursor:pointer${isSel ? `;background:var(--bg-secondary);margin:0 -16px;padding:4px 16px;border-radius:4px;border-left:3px solid ${color}` : ''}">
+          <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div>
+          <div class="budget-bar-label" title="${cat}" style="font-weight:${isSel ? '600' : '400'}">${cat}</div>
+          <div class="budget-bar-wrap"><div class="budget-bar" style="width:${(amt/maxCat)*100}%;background:${color}"></div></div>
+          <div class="budget-bar-amount">${fmtAUD(amt)}</div>
+        </div>`;
+      }).join('');
+
+      const comparePanel = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div>
+          <div class="budget-section-title" style="margin-bottom:10px;color:#16a34a">Incomings <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${fmtAUD(totalInc)}</span></div>
+          <div class="budget-panel-box">${incSrcRows || '<div style="padding:16px;color:var(--text-muted);font-size:13px;text-align:center">No income</div>'}</div>
+        </div>
+        <div>
+          <div class="budget-section-title" style="margin-bottom:10px;color:var(--accent)">Outgoings <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${fmtAUD(totalExp)}</span></div>
+          <div class="budget-panel-box">${outRows || noData()}</div>
+        </div>
+      </div>`;
+
+      const merch = topMerchants(txs);
+      const maxMerch = merch[0]?.[1] || 1;
+      // Group by category, sorted by category total descending
+      const merchByCat = {};
+      merch.forEach(([name, amt, cat]) => {
+        if (!merchByCat[cat]) merchByCat[cat] = [];
+        merchByCat[cat].push([name, amt]);
+      });
+      const sortedCats = Object.entries(merchByCat)
+        .map(([cat, items]) => [cat, items.reduce((s, [, a]) => s + a, 0), items])
+        .sort((a, b) => b[1] - a[1]);
+      let rank = 1;
+      const merchRows = sortedCats.map(([cat, , items]) => {
+        const catEsc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const isSelCat = budgetSelectedCategory === cat;
+        const cc = catColor(cat);
+        const heading = `<div onclick="selectCategory('${catEsc}')" style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;color:${isSelCat ? cc : 'var(--text-muted)'};text-transform:uppercase;letter-spacing:0.07em;padding:10px 0 4px;border-bottom:2px solid ${isSelCat ? cc : 'var(--border-light)'};user-select:none">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${cc};flex-shrink:0"></span>${cat}${isSelCat ? ' ✕' : ''}
+        </div>`;
+        const rows = items.map(([name, amt]) => `<div class="budget-bar-row">
+          <div class="budget-rank">${rank++}</div>
+          <div class="budget-bar-label" style="flex:0 0 140px" title="${name}">${name}</div>
+          <div class="budget-bar-wrap"><div class="budget-bar blue" style="width:${(amt / maxMerch) * 100}%"></div></div>
+          <div class="budget-bar-amount">${fmtAUD(amt)}</div>
+        </div>`).join('');
+        return heading + rows;
+      }).join('');
+      const merchPanel = sec('merch', 'Top merchants', `<div class="budget-panel-box">${merchRows || noData()}</div>`);
+
+      const monthly = monthlyTotals();
+      const maxM = Math.max(...monthly.map(([, d]) => Math.max(d.inc, d.exp)), 1);
+      const H = 80;
+      const trendBars = monthly.map(([m, d]) => {
+        const iH = Math.round((d.inc / maxM) * H);
+        const eH = Math.round((d.exp / maxM) * H);
+        return `<div class="budget-trend-group${m === budgetSelectedMonth ? ' selected' : ''}" onclick="selectMonth('${m}')">
+          <div class="budget-trend-bars">
+            <div class="budget-trend-bar income" style="height:${iH}px" title="Income ${fmtAUD(d.inc)}"></div>
+            <div class="budget-trend-bar expense" style="height:${eH}px" title="Expenses ${fmtAUD(d.exp)}"></div>
+          </div>
+          <div class="budget-trend-month">${fmtMonth(m).split(' ')[0]}</div>
+        </div>`;
+      }).join('');
+      const legend = `<span style="margin-left:12px;font-size:11px;font-weight:400;color:var(--text-muted)">
+          <span style="display:inline-block;width:10px;height:10px;background:#16a34a;border-radius:2px;opacity:.75;margin-right:3px;vertical-align:middle"></span>Income
+          <span style="display:inline-block;width:10px;height:10px;background:var(--accent);border-radius:2px;opacity:.75;margin:0 3px 0 8px;vertical-align:middle"></span>Expenses
+        </span>`;
+
+      const annual = annualTotals();
+      const maxA = Math.max(...annual.map(([, d]) => Math.max(d.inc, d.exp)), 1);
+      const annualBars = annual.map(([yr, d]) => {
+        const iH = Math.round((d.inc / maxA) * H);
+        const eH = Math.round((d.exp / maxA) * H);
+        const isSelected = budgetSelectedYear === yr;
+        return `<div class="budget-trend-group${isSelected ? ' selected' : ''}" onclick="selectYear('${yr}')">
+          <div class="budget-trend-bars">
+            <div class="budget-trend-bar income" style="height:${iH}px" title="Income ${fmtAUD(d.inc)}"></div>
+            <div class="budget-trend-bar expense" style="height:${eH}px" title="Expenses ${fmtAUD(d.exp)}"></div>
+          </div>
+          <div class="budget-trend-month">${yr}</div>
+        </div>`;
+      }).join('');
+      const annualPanel = sec('annual', 'Annual trend', `<div class="budget-trend-wrap"><div class="budget-trend">${annualBars}</div></div>`, legend);
+      const trendPanel  = sec('trend',  'Monthly trend', `<div class="budget-trend-wrap"><div class="budget-trend">${trendBars}</div></div>`, legend);
+
+      // Category drill-down: merchant breakdown for the selected category
+      let catDetailPanel = '';
+      if (budgetSelectedCategory) {
+        const catTxs = txs.filter(t => effectiveCat(t) === budgetSelectedCategory);
+        const catTotal = catTxs.reduce((s, t) => s + t.debit, 0);
+        const catMerch = {};
+        catTxs.forEach(t => {
+          if (t.debit > 0) {
+            const key = cleanMerchant(t.narrative);
+            if (key) catMerch[key] = (catMerch[key] || 0) + t.debit;
+          }
+        });
+        const catMerchList = Object.entries(catMerch).sort((a, b) => b[1] - a[1]);
+        const maxCM = catMerchList[0]?.[1] || 1;
+        const catMerchRows = catMerchList.map(([name, amt]) => `<div class="budget-bar-row">
+          <div class="budget-bar-label" style="flex:1;min-width:0" title="${name}">${name}</div>
+          <div class="budget-bar-wrap"><div class="budget-bar" style="width:${(amt / maxCM) * 100}%;background:${catColor(budgetSelectedCategory)}"></div></div>
+          <div class="budget-bar-amount">${fmtAUD(amt)}</div>
+          <div style="flex:0 0 50px;text-align:right;font-size:11px;color:var(--text-muted)">${Math.round(amt / catTotal * 100)}%</div>
+        </div>`).join('');
+        const selColor = catColor(budgetSelectedCategory);
+        catDetailPanel = `<div style="margin-bottom:24px;border-left:4px solid ${selColor};padding-left:14px">
+          <div class="budget-section-title" style="margin-bottom:10px;color:${selColor}">${budgetSelectedCategory}
+            <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:8px">${fmtAUD(catTotal)} total · ${catTxs.length} transactions</span>
+            <button onclick="selectCategory(null)" style="font-size:11px;padding:2px 8px;margin-left:12px;cursor:pointer;background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;color:var(--text-muted)">✕ Clear</button>
+          </div>
+          <div class="budget-panel-box">${catMerchRows || noData()}</div>
+        </div>`;
+      }
+
+      // Income source drill-down for overview
+      let incDetailPanel = '';
+      if (budgetSelectedIncomeSource) {
+        const srcName = budgetSelectedIncomeSource;
+        const srcTxs = txs.filter(t => {
+          if (t.credit <= 0) return false;
+          const key = cleanMerchant(t.narrative) || t.narrative.trim().slice(0, 35);
+          return key === srcName;
+        }).sort((a, b) => b.date - a.date);
+        const srcTotal = srcTxs.reduce((s, t) => s + t.credit, 0);
+        incDetailPanel = `<div style="margin-bottom:24px;border-left:4px solid #16a34a;padding-left:14px">
+          <div class="budget-section-title" style="margin-bottom:10px;color:#16a34a">${srcName}
+            <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:8px">+${fmtAUD(srcTotal)} · ${srcTxs.length} transaction${srcTxs.length !== 1 ? 's' : ''}</span>
+            <button onclick="selectIncomeSource(null)" style="font-size:11px;padding:2px 8px;margin-left:12px;cursor:pointer;background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;color:var(--text-muted)">✕ Clear</button>
+          </div>
+          <div class="budget-tx-list">${renderTxRows(srcTxs)}</div>
+        </div>`;
+      }
+
+      const catFiltered = budgetSelectedCategory ? txs.filter(t => effectiveCat(t) === budgetSelectedCategory) : txs;
+      const sorted = catFiltered.slice().sort((a, b) => b.date - a.date);
+      const txRows = renderTxRows(sorted.slice(0, 200));
+      const txTitle = budgetSelectedCategory
+        ? `${budgetSelectedCategory} transactions`
+        : `Transactions${sorted.length > 200 ? ' (200 most recent)' : ''}`;
+      const txPanel = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div class="budget-section-title" style="margin-bottom:0">${txTitle}</div>
+        <input type="text" id="txSearch" placeholder="Search narrative or category…" oninput="filterTx(this.value)"
+          style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px;color:var(--text-primary);font-family:inherit;width:220px;">
+      </div>
+      <div class="budget-tx-list" id="txList">${txRows}</div>`;
+
+      const importedFiles = await getImportedFiles();
+      const fileList = Object.values(importedFiles).sort((a, b) => a.filename.localeCompare(b.filename));
+      const unknownCount = [...new Set(budgetTransactions
+        .filter(t => t.debit > 0 && (!t.category || t.category === 'Uncategorised') && !autoCategory(t.narrative))
+        .map(t => cleanMerchant(t.narrative)).filter(Boolean)
+      )].filter(n => !getMerchantCatCache()[n]).length;
+      const classifyBtn = unknownCount > 0
+        ? `<button onclick="classifyUnknownMerchants()" style="margin-left:12px;font-size:11px;padding:3px 10px;cursor:pointer;background:var(--accent);color:white;border:none;border-radius:4px">✦ Auto-classify ${unknownCount} merchants</button>`
+        : `<span style="margin-left:12px;font-size:11px;color:#16a34a">✓ All merchants categorised</span>`;
+      const sourcesHtml = `<div style="padding:10px 16px;background:var(--bg-secondary);border-radius:8px;font-size:11px;color:var(--text-muted);margin-bottom:24px;">
+        <strong style="color:var(--text-secondary)">Imported data:</strong>
+        ${fileList.map(f => `<span style="margin-left:10px">${f.filename} <span style="opacity:.7">(${f.count} rows · ${new Date(f.importedAt).toLocaleDateString()})</span></span>`).join('')}
+        ${classifyBtn}
+      </div>`;
+
+      const _balAccounts = budgetSelectedAccount
+        ? [budgetSelectedAccount]
+        : [...new Set(budgetTransactions.map(t => t.account))].filter(Boolean).sort();
+      const balCharts = _balAccounts.map(acc => {
+        const accTxs = txs.filter(t => t.account === acc);
+        if (accTxs.length < 2) return '';
+        const color = acctColor(acc);
+        return `<div style="margin-bottom:16px">
+          <div style="font-size:11px;font-weight:600;color:${color};margin-bottom:4px;padding-left:4px;border-left:3px solid ${color};padding-left:8px">${acctName(acc)}</div>
+          <div style="padding:4px 0">${balanceChartSVG(accTxs)}</div>
+        </div>`;
+      }).join('');
+      const balPanel = sec('bal', 'Running balance', balCharts || noData());
+
+      const recurring = detectRecurring(budgetTransactions);
+      const recurHeader = `<div class="budget-bar-row" style="border-bottom:2px solid var(--border-light);padding-bottom:6px;margin-bottom:2px">
+        <div style="flex:1;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Name</div>
+        <div style="flex:0 0 75px;text-align:right;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Avg/Period</div>
+        <div style="flex:0 0 90px;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;padding-left:12px">Frequency</div>
+        <div style="flex:0 0 130px;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Category</div>
+        <div style="flex:0 0 120px;text-align:right;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Occurrences</div>
+      </div>`;
+      const recurRows = recurring.map(r => `<div class="budget-bar-row">
+        <div class="budget-bar-label" style="flex:1;min-width:0" title="${r.name}">${r.name}</div>
+        <div class="budget-bar-amount">${fmtAUD(r.avgAmt)}</div>
+        <div style="flex:0 0 90px;font-size:11px;color:var(--text-muted);padding-left:12px">${r.freq}</div>
+        <div style="flex:0 0 130px;font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.category}</div>
+        <div style="flex:0 0 120px;text-align:right;font-size:11px;color:var(--text-muted)">${r.count}× · last ${r.lastDate}</div>
+      </div>`).join('');
+      const recurPanel = sec('recur', 'Recurring payments',
+        `<div class="budget-panel-box">${recurring.length ? recurHeader + recurRows : noData()}</div>`,
+        `<span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:8px">detected from all-time data</span>`);
+
+      // Categories tab: full grid of ALL defined categories, then drill-down
+      const catSpendMap = Object.fromEntries(catSpending(txs));
+      const allDefinedCats = Object.keys(CAT_COLORS).filter(c => c !== 'Uncategorised' && c !== 'Other');
+      const uncatAmt = catSpendMap['Uncategorised'] || 0;
+      const catCards = allDefinedCats.map(cat => {
+        const amt = catSpendMap[cat] || 0;
+        const color = catColor(cat);
+        const isSelected = budgetSelectedCategory === cat;
+        const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const txCount = txs.filter(t => effectiveCat(t) === cat).length;
+        return `<div onclick="selectCategory('${esc}')" style="cursor:pointer;padding:14px 16px;border-radius:10px;border:2px solid ${isSelected ? color : 'var(--border)'};background:${isSelected ? 'var(--bg-secondary)' : 'var(--bg-primary)'};display:flex;flex-direction:column;gap:6px;transition:border-color .15s">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
+            <span style="font-size:12px;font-weight:600;color:var(--text-primary)">${cat}</span>
+          </div>
+          <div style="font-size:18px;font-weight:700;color:${amt > 0 ? color : 'var(--text-muted)'}">${amt > 0 ? fmtAUD(amt) : '—'}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${txCount > 0 ? txCount + ' transaction' + (txCount > 1 ? 's' : '') : 'no transactions'}</div>
+        </div>`;
+      }).join('');
+      const uncatEsc = 'Uncategorised';
+      const uncatCount = txs.filter(t => effectiveCat(t) === 'Uncategorised').length;
+      const uncatCard = `<div onclick="selectCategory('${uncatEsc}')" style="cursor:pointer;padding:14px 16px;border-radius:10px;border:2px solid ${budgetSelectedCategory==='Uncategorised'?'#d1d5db':'var(--border)'};background:${budgetSelectedCategory==='Uncategorised'?'var(--bg-secondary)':'var(--bg-primary)'};display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:10px;height:10px;border-radius:50%;background:#d1d5db;flex-shrink:0;display:inline-block"></span>
+          <span style="font-size:12px;font-weight:600;color:var(--text-primary)">Uncategorised</span>
+        </div>
+        <div style="font-size:18px;font-weight:700;color:${uncatAmt > 0 ? '#9ca3af' : 'var(--text-muted)'}">${uncatAmt > 0 ? fmtAUD(uncatAmt) : '—'}</div>
+        <div style="font-size:11px;color:var(--text-muted)">${uncatCount > 0 ? uncatCount + ' transaction' + (uncatCount > 1 ? 's' : '') : 'no transactions'}</div>
+      </div>`;
+      const catGrid = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px">${catCards}${uncatCard}</div>`;
+
+      let catTabContent = catGrid;
+      if (budgetSelectedCategory) {
+        const catTxsSorted = txs.filter(t => effectiveCat(t) === budgetSelectedCategory).slice().sort((a, b) => b.date - a.date);
+        catTabContent += catDetailPanel;
+        catTabContent += `<div class="budget-section-title" style="margin-bottom:10px">${budgetSelectedCategory} transactions</div>
+          <div class="budget-tx-list">${renderTxRows(catTxsSorted)}</div>`;
+      }
+
+      const tabs = `<div class="budget-tabs">
+        <button class="budget-tab${budgetSelectedTab==='overview'?' active':''}" onclick="selectTab('overview')">Overview</button>
+        <button class="budget-tab${budgetSelectedTab==='categories'?' active':''}" onclick="selectTab('categories')">Categories</button>
+        <button class="budget-tab${budgetSelectedTab==='transactions'?' active':''}" onclick="selectTab('transactions')">Transactions</button>
+        <button class="budget-tab${budgetSelectedTab==='trends'?' active':''}" onclick="selectTab('trends')">Trends</button>
+        <button class="budget-tab${budgetSelectedTab==='recurring'?' active':''}" onclick="selectTab('recurring')">Recurring</button>
+      </div>`;
+
+      document.getElementById('stickyBar').innerHTML = acctSel + yearSel + monthSel + tabs;
+
+      let tabContent = '';
+      if (budgetSelectedTab === 'overview') {
+        let overviewDrill = '';
+        if (budgetSelectedCategory) {
+          const drillTxs = txs.filter(t => effectiveCat(t) === budgetSelectedCategory).sort((a, b) => b.date - a.date);
+          overviewDrill = catDetailPanel + `<div class="budget-tx-list" style="margin-bottom:24px">${renderTxRows(drillTxs)}</div>`;
+        } else if (budgetSelectedIncomeSource) {
+          overviewDrill = incDetailPanel;
+        }
+        tabContent = cards + comparePanel + overviewDrill;
+      } else if (budgetSelectedTab === 'categories') {
+        tabContent = catTabContent;
+      } else if (budgetSelectedTab === 'transactions') {
+        tabContent = catDetailPanel + merchPanel + txPanel + sourcesHtml;
+      } else if (budgetSelectedTab === 'trends') {
+        tabContent = cards + balPanel + annualPanel + trendPanel;
+      } else if (budgetSelectedTab === 'recurring') {
+        tabContent = recurPanel;
+      }
+
+      document.getElementById('budgetContent').innerHTML = tabContent;
+    }
+
+    function noData() {
+      return '<div style="padding:16px;color:var(--text-muted);font-size:13px;text-align:center">No expenses</div>';
+    }
+
+    function renderTxRows(txs) {
+      if (!txs.length) return '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">No transactions</div>';
+
+      function fmtDateInline(dateStr) {
+        const [d, m, y] = dateStr.split('/');
+        const dt = new Date(+y, +m - 1, +d);
+        return dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+      }
+
+      return txs.map(t => {
+        const merchant = cleanMerchant(t.narrative) || t.narrative;
+        const cat = effectiveCat(t);
+        const color = catColor(cat);
+        const bal = t.balance ? `<div class="budget-tx-balance">${fmtAUD(t.balance)}</div>` : '';
+        const narrAttr = t.narrative.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+        let catBadge;
+        if (cat === 'Uncategorised') {
+          catBadge = `<div class="budget-tx-cat-badge" data-narrative="${narrAttr}" style="background:var(--bg-secondary);color:var(--text-muted);border-color:var(--border);border-style:dashed;cursor:pointer;user-select:none">Categorise ▾</div>`;
+        } else {
+          catBadge = `<div class="budget-tx-cat-badge" data-narrative="${narrAttr}" style="background:${color}18;color:${color};border-color:${color}40;cursor:pointer;user-select:none">${cat} ▾</div>`;
+        }
+        return `<div class="budget-tx-row" style="border-left:3px solid ${color}">
+          <div class="budget-tx-date">${fmtDateInline(t.dateStr)}</div>
+          <div class="budget-tx-merchant" title="${t.narrative}">${merchant}</div>
+          ${catBadge}
+          <div class="budget-tx-amount ${t.debit > 0 ? 'expense' : 'income'}">${t.debit > 0 ? '−' + fmtAUD(t.debit) : '+' + fmtAUD(t.credit)}</div>
+          ${bal}
+        </div>`;
+      }).join('');
+    }
+
+    function filterTx(q) {
+      const ql = q.toLowerCase();
+      let txs = filtered().slice().sort((a, b) => b.date - a.date);
+      if (budgetSelectedCategory) txs = txs.filter(t => effectiveCat(t) === budgetSelectedCategory);
+      const rows = q ? txs.filter(t =>
+        t.narrative.toLowerCase().includes(ql) || effectiveCat(t).toLowerCase().includes(ql)) : txs;
+      document.getElementById('txList').innerHTML = renderTxRows(rows.slice(0, 200));
+    }
+
+    function toggleSettings() {
+      const p = document.getElementById('settingsPanel');
+      p.style.display = p.style.display === 'none' ? '' : 'none';
+      if (p.style.display !== 'none') {
+        const key = localStorage.getItem('budget_api_key') || '';
+        document.getElementById('apiKeyInput').value = key;
+      }
+    }
+    function saveApiKey() {
+      const val = document.getElementById('apiKeyInput').value.trim();
+      if (val) { localStorage.setItem('budget_api_key', val); showStatus('API key saved'); }
+    }
+    function clearApiKey() {
+      localStorage.removeItem('budget_api_key');
+      localStorage.removeItem('budget_merchant_cats');
+      document.getElementById('apiKeyInput').value = '';
+      showStatus('API key and merchant cache cleared');
+      renderBudget();
+    }
+
+    function selectTab(tab) { budgetSelectedTab = tab; window.scrollTo({top:0}); renderBudget(); }
+
+    function getCollapsed() {
+      try { return new Set(JSON.parse(localStorage.getItem('budget_collapsed') || '[]')); } catch { return new Set(); }
+    }
+    function toggleSection(id) {
+      const s = getCollapsed();
+      s.has(id) ? s.delete(id) : s.add(id);
+      localStorage.setItem('budget_collapsed', JSON.stringify([...s]));
+      const content = document.getElementById('sec-' + id);
+      const btn = document.getElementById('tog-' + id);
+      if (content) content.style.display = s.has(id) ? 'none' : '';
+      if (btn) btn.textContent = s.has(id) ? '›' : '⌄';
+    }
+    function sec(id, title, content, extraTitleHtml = '') {
+      const collapsed = getCollapsed().has(id);
+      return `<div style="margin-bottom:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${collapsed?'0':'10px'};cursor:pointer" onclick="toggleSection('${id}')">
+          <div class="budget-section-title" style="margin-bottom:0">${title}${extraTitleHtml}</div>
+          <button id="tog-${id}" style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;padding:0 4px;line-height:1">${collapsed ? '›' : '⌄'}</button>
+        </div>
+        <div id="sec-${id}" style="${collapsed ? 'display:none' : ''}">${content}</div>
+      </div>`;
+    }
+    function selectAccount(acc) { budgetSelectedAccount = acc; budgetSelectedYear = null; budgetSelectedMonth = null; budgetSelectedCategory = null; budgetSelectedIncomeSource = null; window.scrollTo({top:0}); renderBudget(); }
+    function selectCategory(cat) {
+      budgetSelectedCategory = cat;
+      budgetSelectedIncomeSource = null;
+      if (cat && budgetSelectedTab !== 'categories') budgetSelectedTab = 'categories';
+      window.scrollTo({top: 0});
+      renderBudget();
+    }
+    function selectOverviewCategory(cat) {
+      budgetSelectedCategory = budgetSelectedCategory === cat ? null : cat;
+      budgetSelectedIncomeSource = null;
+      window.scrollTo({top: 0});
+      renderBudget();
+    }
+    function selectIncomeSource(src) {
+      budgetSelectedIncomeSource = budgetSelectedIncomeSource === src ? null : src;
+      budgetSelectedCategory = null;
+      window.scrollTo({top: 0});
+      renderBudget();
+    }
+
+    function selectMonth(m) { budgetSelectedMonth = m; budgetSelectedCategory = null; budgetSelectedIncomeSource = null; window.scrollTo({top:0}); renderBudget(); }
+    function selectYear(yr) {
+      budgetSelectedYear = yr === null ? null : yr;
+      budgetSelectedMonth = null;
+      budgetSelectedCategory = null;
+      budgetSelectedIncomeSource = null;
+      window.scrollTo({top:0});
+      renderBudget();
+    }
+
+    function setLimit(cat) {
+      const cur = budgetLimits[cat] ? budgetLimits[cat].toFixed(2) : '';
+      const val = prompt(`Monthly budget limit for "${cat}" in $\n(Leave blank to remove):`, cur);
+      if (val === null) return;
+      const n = parseFloat(val);
+      if (!isNaN(n) && n > 0) { budgetLimits[cat] = n; saveBudgetLimits(); renderBudget(); }
+      else if (val.trim() === '') { delete budgetLimits[cat]; saveBudgetLimits(); renderBudget(); }
+    }
+
+    window.selectMonth = selectMonth;
+    window.selectYear = selectYear;
+    window.selectCategory = selectCategory;
+    window.setLimit = setLimit;
+    window.filterTx = filterTx;
+
+    document.addEventListener('click', function(e) {
+      const badge = e.target.closest('.budget-tx-cat-badge');
+      if (badge) { e.stopPropagation(); openCatDropdown(badge); }
+    });
+
+    document.getElementById('importBtn').addEventListener('click', doImport);
+    document.getElementById('importBtnLarge').addEventListener('click', doImport);
+    document.getElementById('changeFolderBtn').addEventListener('click', changeFolder);
+    document.getElementById('resetBtn').addEventListener('click', async () => {
+      if (!confirm('Clear all imported data and re-import everything from the folder?')) return;
+      const db = await openDB();
+      await new Promise((res, rej) => {
+        const tx = db.transaction(['transactions', 'imported_files'], 'readwrite');
+        tx.objectStore('transactions').clear();
+        tx.objectStore('imported_files').clear();
+        tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+      });
+      localStorage.removeItem('budget_limits');
+      budgetTransactions = [];
+      budgetLimits = {};
+      budgetSelectedMonth = null;
+      showStatus('Cleared — re-importing…');
+      await doImport();
+    });
+    document.getElementById('folderInput').addEventListener('change', async function() {
+      await importFromFileList(this.files);
+      this.value = '';
+    });
+
+    // On startup: load from DB, then silently check for new files
+    (async () => {
+      const txs = (await loadAllTransactions()).filter(t => !EXCLUDED_ACCOUNTS.has(t.account));
+      if (txs.length) {
+        budgetTransactions = txs;
+        const years = [...new Set(txs.map(t => t.month.split('-')[0]))].sort();
+        budgetSelectedYear = years[years.length - 1] || null;
+        budgetSelectedMonth = null;
+        await renderBudget();
+      }
+      const saved = await getSavedHandle();
+      if (saved) showChangeFolderBtn(true);
+      await autoCheckNewFiles();
+    })();
+  </script>
+</body>
+</html>
