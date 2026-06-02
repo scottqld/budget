@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.9</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.10</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1585,7 +1585,7 @@
         const narrAttr = t.narrative.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
         let catBadge;
         if (cat === 'Uncategorised') {
-          catBadge = `<div class="budget-tx-cat-badge" data-narrative="${narrAttr}" style="background:var(--bg-secondary);color:var(--text-muted);border-color:var(--border);border-style:dashed;cursor:pointer;user-select:none">Categorise ▾</div>`;
+          catBadge = `<div class="budget-tx-cat-badge" data-narrative="${narrAttr}" style="background:#D9775720;color:#D97757;border-color:#D9775760;border-style:dashed;cursor:pointer;user-select:none;font-weight:600">+ Categorise</div>`;
         } else {
           catBadge = `<div class="budget-tx-cat-badge" data-narrative="${narrAttr}" style="background:${color}18;color:${color};border-color:${color}40;cursor:pointer;user-select:none">${cat} ▾</div>`;
         }
