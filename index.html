@@ -191,11 +191,13 @@
     .budget-tx-amount.income { color: #16a34a; }
     .budget-tx-amount.expense { color: var(--accent); }
     .budget-tx-balance { flex: 0 0 80px; text-align: right; color: var(--text-muted); font-size: 11px; }
+    .budget-tx-row .tx-del-btn { opacity: 0; transition: opacity .15s; }
+    .budget-tx-row:hover .tx-del-btn { opacity: 1; }
   </style>
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.30</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.31</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -856,8 +858,13 @@
         const db = await openDB();
         return await new Promise((res, rej) => {
           const tx = db.transaction('transactions', 'readonly');
-          const req = tx.objectStore('transactions').getAll();
-          req.onsuccess = e => res(e.target.result);
+          const items = [];
+          const req = tx.objectStore('transactions').openCursor();
+          req.onsuccess = e => {
+            const cursor = e.target.result;
+            if (cursor) { items.push({ ...cursor.value, id: cursor.key }); cursor.continue(); }
+            else res(items);
+          };
           req.onerror = e => rej(e.target.error);
         });
       } catch { return []; }
@@ -1840,12 +1847,14 @@
         } else {
           catBadge = `<div class="budget-tx-cat-badge" data-narrative="${narrAttr}" style="background:${color}18;color:${color};border-color:${color}40;cursor:pointer;user-select:none">${cat} ▾</div>`;
         }
+        const delBtn = t.id != null ? `<button class="tx-del-btn" onclick="event.stopPropagation();deleteTx(${t.id})" style="flex:0 0 auto;background:none;border:none;padding:2px 5px;border-radius:4px;cursor:pointer;font-size:15px;color:#9ca3af;line-height:1" onmouseenter="this.style.color='#ef4444'" onmouseleave="this.style.color='#9ca3af'" title="Delete transaction">×</button>` : '';
         return `<div class="budget-tx-row" style="border-left:3px solid ${color}">
           <div class="budget-tx-date">${fmtDateInline(t.dateStr)}</div>
           <div class="budget-tx-merchant" title="${t.narrative}">${merchant}</div>
           ${catBadge}
           <div class="budget-tx-amount ${t.debit > 0 ? 'expense' : 'income'}">${t.debit > 0 ? '−' + fmtAUD(t.debit) : '+' + fmtAUD(t.credit)}</div>
           ${bal}
+          ${delBtn}
         </div>`;
       }).join('');
     }
@@ -2030,6 +2039,21 @@
       renderBudget();
     }
 
+    async function deleteTx(id) {
+      if (!confirm('Delete this transaction? This cannot be undone.')) return;
+      const db = await openDB();
+      await new Promise((res, rej) => {
+        const tx = db.transaction('transactions', 'readwrite');
+        tx.objectStore('transactions').delete(id);
+        tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+      });
+      budgetTransactions = budgetTransactions.filter(t => t.id !== id);
+      _recurringCache = null;
+      renderBudget();
+      showStatus('Transaction deleted');
+    }
+
+    window.deleteTx = deleteTx;
     window.selectMonth = selectMonth;
     window.selectYear = selectYear;
     window.selectCategory = selectCategory;
