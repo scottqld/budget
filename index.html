@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.26</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.27</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -722,6 +722,15 @@
       'Other':            '#9ca3af',
       'Uncategorised':    '#d1d5db',
     };
+    // Custom-category palette — colours the user probably hasn't used yet
+    const CUSTOM_CAT_PALETTE = ['#e11d48','#be123c','#1d4ed8','#0891b2','#047857','#92400e','#9a3412','#4338ca','#0e7490','#166534','#854d0e','#be185d','#1e3a5f','#134e4a','#713f12'];
+
+    function getCustomCats() {
+      try { return JSON.parse(localStorage.getItem('budget_custom_cats') || '{}'); } catch { return {}; }
+    }
+    // Merge saved custom categories into CAT_COLORS on startup
+    Object.assign(CAT_COLORS, getCustomCats());
+
     function catColor(cat) { return CAT_COLORS[cat] || '#9ca3af'; }
     let budgetSelectedYear = null;
     let budgetSelectedMonth = null;
@@ -1689,7 +1698,11 @@
         <div style="font-size:18px;font-weight:700;color:${uncatAmt > 0 ? '#9ca3af' : 'var(--text-muted)'}">${uncatAmt > 0 ? fmtAUD(uncatAmt) : '—'}</div>
         <div style="font-size:11px;color:var(--text-muted)">${uncatCount > 0 ? uncatCount + ' transaction' + (uncatCount > 1 ? 's' : '') : 'no transactions'}</div>
       </div>`;
-      const catGrid = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px">${catCards}${uncatCard}</div>`;
+      const addCatCard = `<div onclick="showAddCategoryModal()" style="cursor:pointer;padding:14px 16px;border-radius:10px;border:2px dashed var(--border);background:var(--bg-primary);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;transition:border-color .15s;min-height:96px" onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'">
+        <div style="font-size:24px;color:var(--text-muted);line-height:1">+</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-muted)">New category</div>
+      </div>`;
+      const catGrid = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px">${catCards}${uncatCard}${addCatCard}</div>`;
 
       let catTabContent = catGrid;
       if (budgetSelectedCategory) {
@@ -1911,6 +1924,55 @@
       else if (val.trim() === '') { delete budgetLimits[cat]; saveBudgetLimits(); renderBudget(); }
     }
 
+    function showAddCategoryModal() {
+      document.querySelectorAll('.add-cat-modal').forEach(d => d.remove());
+      const usedColors = new Set(Object.values(CAT_COLORS));
+      const defaultColor = CUSTOM_CAT_PALETTE.find(c => !usedColors.has(c)) || CUSTOM_CAT_PALETTE[0];
+      const swatches = CUSTOM_CAT_PALETTE.map(c =>
+        `<span data-color="${c}" class="cswatch" onclick="document.querySelectorAll('.cswatch').forEach(s=>s.style.outline='none');this.style.outline='2px solid '+getComputedStyle(document.documentElement).getPropertyValue('--text-primary');document.getElementById('catColorPick').value='${c}'" style="display:inline-block;width:22px;height:22px;border-radius:50%;background:${c};cursor:pointer;flex-shrink:0;${c===defaultColor?'outline:2px solid #141413':''}"></span>`
+      ).join('');
+      const overlay = document.createElement('div');
+      overlay.className = 'add-cat-modal';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center';
+      overlay.innerHTML = `<div style="background:var(--bg-card);border-radius:12px;padding:24px;width:340px;box-shadow:0 8px 40px rgba(0,0,0,.3);font-family:inherit">
+        <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:16px">New category</div>
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:6px">Name</label>
+          <input id="catNameInput" type="text" placeholder="e.g. Hobbies" style="width:100%;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;color:var(--text-primary);font-family:inherit;outline:none;box-sizing:border-box">
+        </div>
+        <div style="margin-bottom:20px">
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:8px">Colour</label>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            ${swatches}
+            <input id="catColorPick" type="color" value="${defaultColor}" title="Custom colour" style="width:22px;height:22px;border:1px solid var(--border);border-radius:50%;cursor:pointer;padding:0;background:none;flex-shrink:0">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button onclick="this.closest('.add-cat-modal').remove()" style="font-size:13px;padding:7px 16px">Cancel</button>
+          <button onclick="saveNewCategory()" class="primary" style="font-size:13px;padding:7px 16px">Add category</button>
+        </div>
+      </div>`;
+      overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+      document.body.appendChild(overlay);
+      const input = document.getElementById('catNameInput');
+      input.focus();
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') saveNewCategory(); if (e.key === 'Escape') overlay.remove(); });
+    }
+
+    function saveNewCategory() {
+      const name = (document.getElementById('catNameInput')?.value || '').trim();
+      if (!name) { document.getElementById('catNameInput')?.focus(); return; }
+      if (CAT_COLORS[name]) { showStatus(`"${name}" already exists`); return; }
+      const color = document.getElementById('catColorPick')?.value || CUSTOM_CAT_PALETTE[0];
+      document.querySelectorAll('.add-cat-modal').forEach(d => d.remove());
+      const custom = getCustomCats();
+      custom[name] = color;
+      localStorage.setItem('budget_custom_cats', JSON.stringify(custom));
+      CAT_COLORS[name] = color;
+      showStatus(`Category "${name}" added`);
+      renderBudget();
+    }
+
     window.selectMonth = selectMonth;
     window.selectYear = selectYear;
     window.selectCategory = selectCategory;
@@ -1918,6 +1980,8 @@
     window.setLimit = setLimit;
     window.filterTx = filterTx;
     window.exportCSV = exportCSV;
+    window.showAddCategoryModal = showAddCategoryModal;
+    window.saveNewCategory = saveNewCategory;
 
     document.addEventListener('click', function(e) {
       const badge = e.target.closest('.budget-tx-cat-badge');
