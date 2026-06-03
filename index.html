@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.23</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.24</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -794,14 +794,26 @@
       } catch { return null; }
     }
 
-    async function storeTransactions(txs, filename) {
+    function txDedupKey(t) {
+      return `${t.dateStr}|${t.narrative}|${t.debit}|${t.credit}|${t.account}`;
+    }
+
+    async function storeTransactions(txs, filename, existingKeys) {
+      const unique = txs.filter(t => {
+        const k = txDedupKey(t);
+        if (existingKeys.has(k)) return false;
+        existingKeys.add(k);
+        return true;
+      });
+      if (!unique.length) return 0;
       const db = await openDB();
       await new Promise((res, rej) => {
         const tx = db.transaction(['transactions', 'imported_files'], 'readwrite');
-        txs.forEach(t => tx.objectStore('transactions').add(t));
-        tx.objectStore('imported_files').put({ filename, importedAt: new Date(), count: txs.length }, filename);
+        unique.forEach(t => tx.objectStore('transactions').add(t));
+        tx.objectStore('imported_files').put({ filename, importedAt: new Date(), count: unique.length }, filename);
         tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
       });
+      return unique.length;
     }
 
     async function loadAllTransactions() {
@@ -888,11 +900,12 @@
         if (budgetTransactions.length) renderBudget();
         return;
       }
+      const existingKeys = new Set((await loadAllTransactions()).map(txDedupKey));
       let totalNew = 0;
       for (const f of newFiles) {
         const text = await f.text();
         const txs = parseCSV(text);
-        if (txs.length) { await storeTransactions(txs, f.name); totalNew += txs.length; }
+        if (txs.length) totalNew += await storeTransactions(txs, f.name, existingKeys);
       }
       budgetTransactions = (await loadAllTransactions()).filter(t => !EXCLUDED_ACCOUNTS.has(t.account));
       const years = [...new Set(budgetTransactions.map(t => t.month.split('-')[0]))].sort();
@@ -921,11 +934,12 @@
         return;
       }
 
+      const existingKeys = new Set((await loadAllTransactions()).map(txDedupKey));
       let totalNew = 0;
       for (const f of newFiles) {
         const text = await (await f.handle.getFile()).text();
         const txs = parseCSV(text);
-        if (txs.length) { await storeTransactions(txs, f.name); totalNew += txs.length; }
+        if (txs.length) totalNew += await storeTransactions(txs, f.name, existingKeys);
       }
 
       budgetTransactions = (await loadAllTransactions()).filter(t => !EXCLUDED_ACCOUNTS.has(t.account));
@@ -1781,8 +1795,29 @@
       this.value = '';
     });
 
-    // On startup: load from DB, then silently check for new files
+    // On startup: deduplicate existing DB records, then load
+    async function deduplicateDB() {
+      const all = await loadAllTransactions();
+      const seen = new Set();
+      const dupeIds = [];
+      for (const t of all) {
+        const k = txDedupKey(t);
+        if (seen.has(k)) dupeIds.push(t.id);
+        else seen.add(k);
+      }
+      if (!dupeIds.length) return 0;
+      const db = await openDB();
+      await new Promise((res, rej) => {
+        const tx = db.transaction('transactions', 'readwrite');
+        const store = tx.objectStore('transactions');
+        dupeIds.forEach(id => store.delete(id));
+        tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+      });
+      return dupeIds.length;
+    }
+
     (async () => {
+      const removed = await deduplicateDB();
       const txs = (await loadAllTransactions()).filter(t => !EXCLUDED_ACCOUNTS.has(t.account));
       if (txs.length) {
         budgetTransactions = txs;
@@ -1790,6 +1825,7 @@
         budgetSelectedYear = years[years.length - 1] || null;
         budgetSelectedMonth = null;
         await renderBudget();
+        if (removed > 0) showStatus(`Removed ${removed} duplicate transaction${removed > 1 ? 's' : ''}`);
       }
       const saved = await getSavedHandle();
       if (saved) showChangeFolderBtn(true);
