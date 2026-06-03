@@ -188,7 +188,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.53</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.55</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -249,14 +249,11 @@
     };
     function acctName(id) { return ACCOUNT_NAMES[id] || id; }
     const EXCLUDED_ACCOUNTS = new Set(['9962', '033040289567']); // Platinum Mastercard, Westpac eSaver
-    let NON_EXPENSE_CATS;
+    let EXCLUDED_CATS;
     try {
-      let _excArr = JSON.parse(localStorage.getItem('budget_excluded_cats') || '["Bank Transfers"]');
-      // Revert: Salary/Wages is income, not unaccounted — remove from excluded if present
-      _excArr = _excArr.filter(c => c !== 'Salary/Wages');
-      localStorage.setItem('budget_excluded_cats', JSON.stringify(_excArr));
-      NON_EXPENSE_CATS = new Set(_excArr);
-    } catch { NON_EXPENSE_CATS = new Set(['Bank Transfers']); }
+      const _excArr = JSON.parse(localStorage.getItem('budget_excluded_cats') || '["Bank Transfers"]');
+      EXCLUDED_CATS = new Set(_excArr);
+    } catch { EXCLUDED_CATS = new Set(['Bank Transfers']); }
     const _acctPalette = ['#D97757', '#3b82f6', '#16a34a', '#f59e0b', '#8b5cf6', '#ec4899'];
     function acctColor(id) {
       const all = [...new Set(budgetTransactions.map(t => t.account))].filter(Boolean).sort();
@@ -1103,7 +1100,7 @@
 
     function catSpending(txs, inclUnaccounted = false) {
       const m = {};
-      txs.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); if (!inclUnaccounted && c === 'Uncategorised') return; m[c] = (m[c] || 0) + t.debit; } });
+      txs.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); if (!inclUnaccounted && (c === 'Uncategorised' || EXCLUDED_CATS.has(c))) return; m[c] = (m[c] || 0) + t.debit; } });
       return Object.entries(m).sort((a, b) => b[1] - a[1]);
     }
 
@@ -1112,7 +1109,7 @@
       if (budgetSelectedAccount) base = base.filter(t => t.account === budgetSelectedAccount);
       const numMonths = new Set(base.map(t => t.month)).size || 1;
       const totals = {};
-      base.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); if (!inclUnaccounted && c === 'Uncategorised') return; totals[c] = (totals[c] || 0) + t.debit; } });
+      base.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); if (!inclUnaccounted && (c === 'Uncategorised' || EXCLUDED_CATS.has(c))) return; totals[c] = (totals[c] || 0) + t.debit; } });
       const avgs = {};
       for (const [cat, total] of Object.entries(totals)) avgs[cat] = total / numMonths;
       return avgs;
@@ -1237,7 +1234,7 @@
       txs.forEach(t => {
         if (t.debit > 0) {
           const cat = effectiveCat(t);
-          if (NON_EXPENSE_CATS.has(cat) || cat === 'Uncategorised') return;
+          if (EXCLUDED_CATS.has(cat) || cat === 'Uncategorised') return;
           const key = t.vendor || vendorName(t.narrative);
           if (key && !SKIP.has(key)) {
             if (!m[key]) m[key] = { amt: 0, narrative: t.narrative };
@@ -1255,7 +1252,7 @@
       const m = {};
       budgetTransactions.forEach(t => {
         const _c = effectiveCat(t);
-        if (NON_EXPENSE_CATS.has(_c) || _c === 'Uncategorised') return;
+        if (EXCLUDED_CATS.has(_c) || _c === 'Uncategorised') return;
         if (!m[t.month]) m[t.month] = { inc: 0, exp: 0 };
         m[t.month].inc += t.credit;
         m[t.month].exp += t.debit;
@@ -1267,7 +1264,7 @@
       const m = {};
       budgetTransactions.forEach(t => {
         const _c = effectiveCat(t);
-        if (NON_EXPENSE_CATS.has(_c) || _c === 'Uncategorised') return;
+        if (EXCLUDED_CATS.has(_c) || _c === 'Uncategorised') return;
         const year = t.month.split('-')[0];
         if (!m[year]) m[year] = { inc: 0, exp: 0 };
         m[year].inc += t.credit;
@@ -1432,8 +1429,8 @@
       const months = allMonths();
       const years = allYears();
       const inclUnaccounted = budgetSelectedTab === 'all';
-      const totalInc = txs.reduce((s, t) => (inclUnaccounted || effectiveCat(t) !== 'Uncategorised') ? s + t.credit : s, 0);
-      const totalExp = txs.reduce((s, t) => (inclUnaccounted || effectiveCat(t) !== 'Uncategorised') ? s + t.debit : s, 0);
+      const totalInc = txs.reduce((s, t) => { const c = effectiveCat(t); return (inclUnaccounted || (c !== 'Uncategorised' && !EXCLUDED_CATS.has(c))) ? s + t.credit : s; }, 0);
+      const totalExp = txs.reduce((s, t) => { const c = effectiveCat(t); return (inclUnaccounted || (c !== 'Uncategorised' && !EXCLUDED_CATS.has(c))) ? s + t.debit : s; }, 0);
       const net = totalInc - totalExp;
 
       const allAccounts = [...new Set(budgetTransactions.map(t => t.account))].filter(Boolean).sort();
@@ -1466,7 +1463,7 @@
         const monthlyData = allMonths().filter(m => m.startsWith(budgetSelectedYear)).reverse().map(m => {
           let mTxs = budgetTransactions.filter(t => t.month === m);
           if (budgetSelectedAccount) mTxs = mTxs.filter(t => t.account === budgetSelectedAccount);
-          if (!inclUnaccounted) mTxs = mTxs.filter(t => effectiveCat(t) !== 'Uncategorised');
+          if (!inclUnaccounted) mTxs = mTxs.filter(t => { const c = effectiveCat(t); return c !== 'Uncategorised' && !EXCLUDED_CATS.has(c); });
           const inc = mTxs.reduce((s, t) => s + t.credit, 0);
           const exp = mTxs.reduce((s, t) => s + t.debit, 0);
           return { m, inc, exp, net: inc - exp };
@@ -1502,7 +1499,7 @@
         const mdata = allMonths().filter(m => m.startsWith(budgetSelectedYear)).map(m => {
           let mTxs = budgetTransactions.filter(t => t.month === m);
           if (budgetSelectedAccount) mTxs = mTxs.filter(t => t.account === budgetSelectedAccount);
-          if (!inclUnaccounted) mTxs = mTxs.filter(t => effectiveCat(t) !== 'Uncategorised');
+          if (!inclUnaccounted) mTxs = mTxs.filter(t => { const c = effectiveCat(t); return c !== 'Uncategorised' && !EXCLUDED_CATS.has(c); });
           const inc = mTxs.reduce((s, t) => s + t.credit, 0);
           const exp = mTxs.reduce((s, t) => s + t.debit, 0);
           return { m, inc, exp, net: inc - exp };
@@ -1576,7 +1573,7 @@
 
       // Income sources breakdown for overview comparison
       const incSrc = {};
-      txs.filter(t => t.credit > 0 && (inclUnaccounted || effectiveCat(t) !== 'Uncategorised')).forEach(t => {
+      txs.filter(t => t.credit > 0 && (inclUnaccounted || (effectiveCat(t) !== 'Uncategorised' && !EXCLUDED_CATS.has(effectiveCat(t))))).forEach(t => {
         const key = t.vendor || t.narrative.trim().slice(0, 35);
         if (key) incSrc[key] = (incSrc[key] || 0) + t.credit;
       });
@@ -1835,16 +1832,16 @@
         const isSelected = budgetSelectedCategory === cat;
         const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const txCount = txs.filter(t => effectiveCat(t) === cat).length;
-        const excluded = NON_EXPENSE_CATS.has(cat);
+        const excluded = EXCLUDED_CATS.has(cat);
         return `<div onclick="selectCategory('${esc}')" style="cursor:pointer;padding:14px 16px;border-radius:10px;border:2px solid ${isSelected ? color : 'var(--border)'};background:${isSelected ? 'var(--bg-secondary)' : 'var(--bg-primary)'};display:flex;flex-direction:column;gap:6px;transition:border-color .15s${excluded ? ';opacity:.55' : ''}">
           <div style="display:flex;align-items:center;gap:8px">
             <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
             <span style="font-size:12px;font-weight:600;color:var(--text-primary);flex:1">${cat}</span>
             <button onclick="event.stopPropagation();showRenameCategoryModal('${esc}')" style="background:none;border:none;padding:0;cursor:pointer;font-size:12px;color:var(--text-muted);line-height:1" title="Rename category">✏</button>
-            <button onclick="event.stopPropagation();toggleExcludedCat('${esc}')" style="background:none;border:none;padding:0;cursor:pointer;font-size:13px;color:${excluded ? '#ef4444' : 'var(--text-muted)'};line-height:1" title="${excluded ? 'Excluded from trends — click to include' : 'Exclude from trends'}">⊘</button>
+            <button onclick="event.stopPropagation();toggleExcludedCat('${esc}')" style="background:none;border:none;padding:0;cursor:pointer;font-size:13px;color:${excluded ? '#ef4444' : 'var(--text-muted)'};line-height:1" title="${excluded ? 'Marked as unaccounted — click to include' : 'Mark as unaccounted'}">⊘</button>
           </div>
           <div style="font-size:18px;font-weight:700;color:${amt > 0 ? color : 'var(--text-muted)'}">${amt > 0 ? fmtAUD(amt) : '—'}</div>
-          <div style="font-size:11px;color:${excluded ? '#ef4444' : 'var(--text-muted)'}">${excluded ? 'excluded from trends' : txCount > 0 ? txCount + ' transaction' + (txCount > 1 ? 's' : '') : 'no transactions'}</div>
+          <div style="font-size:11px;color:${excluded ? '#ef4444' : 'var(--text-muted)'}">${excluded ? 'unaccounted (hidden from Overview)' : txCount > 0 ? txCount + ' transaction' + (txCount > 1 ? 's' : '') : 'no transactions'}</div>
         </div>`;
       }).join('');
       const uncatEsc = 'Uncategorised';
@@ -1942,7 +1939,7 @@
           if (t.debit <= 0) return;
           if (budgetSelectedAccount && t.account !== budgetSelectedAccount) return;
           const cat = effectiveCat(t);
-          if (NON_EXPENSE_CATS.has(cat) || cat === 'Uncategorised') return;
+          if (EXCLUDED_CATS.has(cat) || cat === 'Uncategorised') return;
           if (!catHeatData[cat]) catHeatData[cat] = {};
           catHeatData[cat][t.month] = (catHeatData[cat][t.month] || 0) + t.debit;
         });
@@ -1957,7 +1954,7 @@
           if (t.debit <= 0) return;
           if (budgetSelectedAccount && t.account !== budgetSelectedAccount) return;
           const cat = effectiveCat(t);
-          if (NON_EXPENSE_CATS.has(cat) || cat === 'Uncategorised') return;
+          if (EXCLUDED_CATS.has(cat) || cat === 'Uncategorised') return;
           const vendor = t.vendor || vendorName(t.narrative);
           if (!vendor) return;
           if (!vendorHeatData[vendor]) vendorHeatData[vendor] = {};
@@ -1982,7 +1979,7 @@
         if (budgetSelectedAccount) bBase = bBase.filter(t => t.account === budgetSelectedAccount);
         bBase.forEach(t => {
           const cat = effectiveCat(t);
-          if (NON_EXPENSE_CATS.has(cat) || cat === 'Uncategorised') return;
+          if (EXCLUDED_CATS.has(cat) || cat === 'Uncategorised') return;
           if (t.debit > 0) {
             const yr = t.month.split('-')[0];
             if (!catYearData[cat]) catYearData[cat] = {};
@@ -2009,7 +2006,7 @@
         bBase.forEach(t => {
           if (t.debit <= 0 || t.month !== curMonth) return;
           const cat = effectiveCat(t);
-          if (NON_EXPENSE_CATS.has(cat) || cat === 'Uncategorised') return;
+          if (EXCLUDED_CATS.has(cat) || cat === 'Uncategorised') return;
           curMonthCatSpend[cat] = (curMonthCatSpend[cat] || 0) + t.debit;
         });
 
@@ -2479,10 +2476,10 @@
         saveBudgetLimits();
       }
       // Update exclusions
-      if (NON_EXPENSE_CATS.has(oldName)) {
-        NON_EXPENSE_CATS.delete(oldName);
-        NON_EXPENSE_CATS.add(newName);
-        localStorage.setItem('budget_excluded_cats', JSON.stringify([...NON_EXPENSE_CATS]));
+      if (EXCLUDED_CATS.has(oldName)) {
+        EXCLUDED_CATS.delete(oldName);
+        EXCLUDED_CATS.add(newName);
+        localStorage.setItem('budget_excluded_cats', JSON.stringify([...EXCLUDED_CATS]));
       }
       // Update selected category if needed
       if (budgetSelectedCategory === oldName) budgetSelectedCategory = newName;
@@ -2512,9 +2509,9 @@
     window.selectCategory = selectCategory;
     window.selectDrillTab = selectDrillTab;
     function toggleExcludedCat(cat) {
-      if (NON_EXPENSE_CATS.has(cat)) NON_EXPENSE_CATS.delete(cat);
-      else NON_EXPENSE_CATS.add(cat);
-      localStorage.setItem('budget_excluded_cats', JSON.stringify([...NON_EXPENSE_CATS]));
+      if (EXCLUDED_CATS.has(cat)) EXCLUDED_CATS.delete(cat);
+      else EXCLUDED_CATS.add(cat);
+      localStorage.setItem('budget_excluded_cats', JSON.stringify([...EXCLUDED_CATS]));
       renderBudget();
     }
 
