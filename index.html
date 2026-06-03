@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.10</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.11</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1577,9 +1577,11 @@
         return dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
       }
 
-      return txs.map(t => {
+      let uncatCount = 0;
+      const rows = txs.map(t => {
         const merchant = cleanMerchant(t.narrative) || t.narrative;
         const cat = effectiveCat(t);
+        if (cat === 'Uncategorised') uncatCount++;
         const color = catColor(cat);
         const bal = t.balance ? `<div class="budget-tx-balance">${fmtAUD(t.balance)}</div>` : '';
         const narrAttr = t.narrative.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
@@ -1597,6 +1599,10 @@
           ${bal}
         </div>`;
       }).join('');
+      const debugBanner = uncatCount > 0
+        ? `<div style="padding:8px 16px;background:#D9775720;border-bottom:1px solid #D9775740;font-size:12px;color:#D97757;font-weight:600">⬇ ${uncatCount} uncategorised — click orange badge to categorise</div>`
+        : '';
+      return debugBanner + rows;
     }
 
     function filterTx(q) {
