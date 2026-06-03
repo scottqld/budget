@@ -188,7 +188,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.48</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.49</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1991,6 +1991,20 @@
         const allBaseMonths = [...new Set(bBase.map(t => t.month))].sort();
         const numBaseMonths = allBaseMonths.length || 1;
 
+        // Current month: prefer today's month if data exists, else latest in dataset
+        const todayMonth = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
+        const curMonth = allBaseMonths.includes(todayMonth) ? todayMonth : allBaseMonths[allBaseMonths.length - 1] || todayMonth;
+        const curMonthLabel = fmtMonth(curMonth);
+
+        // Per-category spend in the current month
+        const curMonthCatSpend = {};
+        bBase.forEach(t => {
+          if (t.debit <= 0 || t.month !== curMonth) return;
+          const cat = effectiveCat(t);
+          if (NON_EXPENSE_CATS.has(cat) || cat === 'Uncategorised') return;
+          curMonthCatSpend[cat] = (curMonthCatSpend[cat] || 0) + t.debit;
+        });
+
         const sortedBudgetCats = Object.entries(catYearData)
           .map(([cat, yd]) => ({ cat, total: Object.values(yd).reduce((s, v) => s + v, 0) }))
           .sort((a, b) => b.total - a.total);
@@ -2000,6 +2014,7 @@
           yearTotalMap[yr] = sortedBudgetCats.reduce((s, { cat }) => s + (catYearData[cat][yr] || 0), 0);
         });
         const grandTotal = sortedBudgetCats.reduce((s, { total }) => s + total, 0);
+        const curMonthTotal = Object.values(curMonthCatSpend).reduce((s, v) => s + v, 0);
 
         const thS = 'padding:8px 12px;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap;border-bottom:2px solid var(--border)';
         const headerCells = budgetYears.map(yr => `<th style="${thS};text-align:right">${yr}</th>`).join('');
@@ -2016,6 +2031,19 @@
             const over = annualLim && amt > annualLim;
             return `<td style="text-align:right;padding:6px 12px;font-size:12px;color:${amt > 0 ? (over ? '#ef4444' : 'var(--text-primary)') : 'var(--text-muted)'};font-weight:${over ? '600' : '400'}">${amt > 0 ? fmtAUD(amt) : '—'}</td>`;
           }).join('');
+
+          // Current month cell
+          const curAmt = curMonthCatSpend[cat] || 0;
+          const over = lim && curAmt > lim;
+          const pct = avgMo > 0 ? Math.round((curAmt / avgMo) * 100) : 0;
+          const deltaColor = over ? '#ef4444' : curAmt > avgMo ? '#f97316' : curAmt > 0 ? '#16a34a' : 'var(--text-muted)';
+          const curCell = curAmt > 0
+            ? `<td style="text-align:right;padding:6px 12px;white-space:nowrap">
+                <div style="font-size:12px;color:${over ? '#ef4444' : 'var(--text-primary)'};font-weight:${over ? '600' : '400'}">${fmtAUD(curAmt)}</div>
+                <div style="font-size:10px;color:${deltaColor}">${pct}% of avg${over ? ' ⚠' : ''}</div>
+               </td>`
+            : `<td style="text-align:right;padding:6px 12px;font-size:12px;color:var(--text-muted)">—</td>`;
+
           return `<tr onclick="selectBudgetCat('${esc}')" style="cursor:pointer;border-bottom:1px solid var(--border-light);transition:background .1s${isSel ? ';background:var(--bg-secondary)' : ''}" onmouseenter="if(!${isSel})this.style.background='var(--bg-secondary)'" onmouseleave="if(!${isSel})this.style.background=''">
             <td style="padding:6px 12px;white-space:nowrap">
               <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px"></span>
@@ -2024,6 +2052,7 @@
             </td>
             ${yearCells}
             <td style="text-align:right;padding:6px 12px;font-size:12px;color:var(--text-muted)">${fmtAUD(avgMo)}</td>
+            ${curCell}
           </tr>`;
         }).join('');
 
@@ -2037,12 +2066,14 @@
                 <th style="${thS};text-align:left">Category</th>
                 ${headerCells}
                 <th style="${thS};text-align:right">Avg/mo</th>
+                <th style="${thS};text-align:right">${curMonthLabel}</th>
               </tr></thead>
               <tbody>${tableRows}</tbody>
               <tfoot><tr style="border-top:2px solid var(--border)">
                 <td style="padding:8px 12px;font-size:12px;font-weight:700;color:var(--text-muted)">Total</td>
                 ${footerCells}
                 <td style="text-align:right;padding:8px 12px;font-size:12px;color:var(--text-muted)">${fmtAUD(grandTotal / numBaseMonths)}</td>
+                <td style="text-align:right;padding:8px 12px;font-size:12px;font-weight:700">${curMonthTotal > 0 ? fmtAUD(curMonthTotal) : '—'}</td>
               </tr></tfoot>
             </table>
           </div>
