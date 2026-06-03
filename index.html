@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.20</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.21</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -446,6 +446,11 @@
 
       // Keyword patterns checked against the raw narrative first
       const patterns = [
+        // Bank transfers
+        [/^(transfer|tfr|trf)\b|\b(transfer|tfr|trf)\s+(to|from)\b/i,  'Bank Transfers'],
+        [/\bosko\b|\bnpp\s+(credit|debit|payment)\b/,                   'Bank Transfers'],
+        [/\binternet\s+banking\s+transfer|\bib\s+transfer\b/,           'Bank Transfers'],
+        [/\bown\s+account|\bself\s+transfer\b/,                         'Bank Transfers'],
         // Takeaway food (before general Dining/Uber rules)
         [/uber[\s*·\-]*eat|menulog|doordash|deliveroo/,          'Eating Out'],
         [/\bmcdonald'?s\b|\bmaccas\b|\bmcdo\b/,                'Eating Out'],
@@ -710,6 +715,7 @@
       'Renovations':      '#b45309',
       'Car Care':         '#0369a1',
       'Pets':             '#7c3aed',
+      'Bank Transfers':   '#0284c7',
       'One-off':          '#be185d',
       'Other':            '#9ca3af',
       'Uncategorised':    '#d1d5db',
