@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.17</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.18</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -285,31 +285,31 @@
       'Metro Petroleum':    'Fuel',
       'On The Run':         'Fuel',
       // Dining
-      "Mcdonalds":          'Dining',
-      "Mcdonald's":         'Dining',
-      'Kfc':                'Dining',
-      'Subway':             'Dining',
-      'Hungry Jacks':       'Dining',
-      'Dominos':            'Dining',
-      "Domino's":           'Dining',
-      'Pizza Hut':          'Dining',
-      'Red Rooster':        'Dining',
-      "Grill'd":            'Dining',
-      'Grilled':            'Dining',
-      "Nando's":            'Dining',
-      'Nandos':             'Dining',
-      'Oporto':             'Dining',
-      'Zambrero':           'Dining',
-      'Boost Juice':        'Dining',
-      'Gloria Jeans':       'Dining',
-      'Starbucks':          'Dining',
-      'Coffee Club':        'Dining',
-      'Muffin Break':       'Dining',
-      "Zarraffa's":         'Dining',
-      'Zarraffas':          'Dining',
-      'Degani':             'Dining',
-      'Chatime':            'Dining',
-      'Guzman':             'Dining',
+      "Mcdonalds":          'Eating Out',
+      "Mcdonald's":         'Eating Out',
+      'Kfc':                'Eating Out',
+      'Subway':             'Eating Out',
+      'Hungry Jacks':       'Eating Out',
+      'Dominos':            'Eating Out',
+      "Domino's":           'Eating Out',
+      'Pizza Hut':          'Eating Out',
+      'Red Rooster':        'Eating Out',
+      "Grill'd":            'Eating Out',
+      'Grilled':            'Eating Out',
+      "Nando's":            'Eating Out',
+      'Nandos':             'Eating Out',
+      'Oporto':             'Eating Out',
+      'Zambrero':           'Eating Out',
+      'Boost Juice':        'Eating Out',
+      'Gloria Jeans':       'Eating Out',
+      'Starbucks':          'Eating Out',
+      'Coffee Club':        'Eating Out',
+      'Muffin Break':       'Eating Out',
+      "Zarraffa's":         'Eating Out',
+      'Zarraffas':          'Eating Out',
+      'Degani':             'Eating Out',
+      'Chatime':            'Eating Out',
+      'Guzman':             'Eating Out',
       // Entertainment & Subscriptions
       'Netflix':            'Entertainment',
       'Stan':               'Entertainment',
@@ -447,20 +447,20 @@
       // Keyword patterns checked against the raw narrative first
       const patterns = [
         // Takeaway food (before general Dining/Uber rules)
-        [/uber[\s*·\-]*eat|menulog|doordash|deliveroo/,          'Takeaway Food'],
-        [/\bmcdonald'?s\b|\bmaccas\b|\bmcdo\b/,                'Takeaway Food'],
-        [/\bkfc\b|kentucky\s*fried/,                           'Takeaway Food'],
-        [/\bsubway\b|\bhungry\s*jack|burger\s*king/,           'Takeaway Food'],
-        [/\bdomino'?s\b|\bpizza\s*hut\b|\bpapparich\b/,       'Takeaway Food'],
-        [/\bnando'?s\b|\bguzman\b|\broll'?d\b|\bchurrito\b/,  'Takeaway Food'],
-        [/\bbuffalo\s*jack|\bwing\s*stop|\bzan'?s\b/,          'Takeaway Food'],
-        [/\bchiptle\b|\btaco\s*bell\b|\bsan\s*churro\b/,       'Takeaway Food'],
-        [/\bwrap\s*it|\bsushi\s*train|\bsushi\s*bar/,          'Takeaway Food'],
-        [/\btakeaway\b|\btake\s*away\b|\bfast\s*food\b/,       'Takeaway Food'],
+        [/uber[\s*·\-]*eat|menulog|doordash|deliveroo/,          'Eating Out'],
+        [/\bmcdonald'?s\b|\bmaccas\b|\bmcdo\b/,                'Eating Out'],
+        [/\bkfc\b|kentucky\s*fried/,                           'Eating Out'],
+        [/\bsubway\b|\bhungry\s*jack|burger\s*king/,           'Eating Out'],
+        [/\bdomino'?s\b|\bpizza\s*hut\b|\bpapparich\b/,       'Eating Out'],
+        [/\bnando'?s\b|\bguzman\b|\broll'?d\b|\bchurrito\b/,  'Eating Out'],
+        [/\bbuffalo\s*jack|\bwing\s*stop|\bzan'?s\b/,          'Eating Out'],
+        [/\bchiptle\b|\btaco\s*bell\b|\bsan\s*churro\b/,       'Eating Out'],
+        [/\bwrap\s*it|\bsushi\s*train|\bsushi\s*bar/,          'Eating Out'],
+        [/\btakeaway\b|\btake\s*away\b|\bfast\s*food\b/,       'Eating Out'],
         // Food delivery (before general Uber rule)
         // Cafes / sit-down dining signals
-        [/\bcafe\b|\bcoffee\b|\bbakery\b|\bpastry\b/,          'Dining'],
-        [/\brestaurant\b|\bbistro\b|\bpizzeria\b|\bsushi\b/,   'Dining'],
+        [/\bcafe\b|\bcoffee\b|\bbakery\b|\bpastry\b/,          'Eating Out'],
+        [/\brestaurant\b|\bbistro\b|\bpizzeria\b|\bsushi\b/,   'Eating Out'],
         // Transport
         [/uber\s*(trip|technologies|bv)/,                      'Transport'],
         [/linkt|e-toll|roam\s*express|citylink|eastlink/,      'Transport'],
@@ -680,8 +680,7 @@
 
     const CAT_COLORS = {
       'Groceries':        '#16a34a',
-      'Dining':           '#f97316',
-      'Takeaway Food':    '#ea580c',
+      'Eating Out':       '#f97316',
       'Entertainment':    '#8b5cf6',
       'Shopping':         '#3b82f6',
       'Fuel':             '#ca8a04',
