@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.15</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.16</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -446,10 +446,19 @@
 
       // Keyword patterns checked against the raw narrative first
       const patterns = [
+        // Takeaway food (before general Dining/Uber rules)
+        [/uber\s*eat|menulog|doordash|deliveroo/,               'Takeaway Food'],
+        [/\bmcdonald'?s\b|\bmaccas\b|\bmcdo\b/,                'Takeaway Food'],
+        [/\bkfc\b|kentucky\s*fried/,                           'Takeaway Food'],
+        [/\bsubway\b|\bhungry\s*jack|burger\s*king/,           'Takeaway Food'],
+        [/\bdomino'?s\b|\bpizza\s*hut\b|\bpapparich\b/,       'Takeaway Food'],
+        [/\bnando'?s\b|\bguzman\b|\broll'?d\b|\bchurrito\b/,  'Takeaway Food'],
+        [/\bbuffalo\s*jack|\bwing\s*stop|\bzan'?s\b/,          'Takeaway Food'],
+        [/\bchiptle\b|\btaco\s*bell\b|\bsan\s*churro\b/,       'Takeaway Food'],
+        [/\bwrap\s*it|\bsushi\s*train|\bsushi\s*bar/,          'Takeaway Food'],
+        [/\btakeaway\b|\btake\s*away\b|\bfast\s*food\b/,       'Takeaway Food'],
         // Food delivery (before general Uber rule)
-        [/uber\s*eat/,                                          'Dining'],
-        [/menulog|doordash|deliveroo/,                          'Dining'],
-        // Cafes / fast food signals
+        // Cafes / sit-down dining signals
         [/\bcafe\b|\bcoffee\b|\bbakery\b|\bpastry\b/,          'Dining'],
         [/\brestaurant\b|\bbistro\b|\bpizzeria\b|\bsushi\b/,   'Dining'],
         // Transport
@@ -672,6 +681,7 @@
     const CAT_COLORS = {
       'Groceries':        '#16a34a',
       'Dining':           '#f97316',
+      'Takeaway Food':    '#ea580c',
       'Entertainment':    '#8b5cf6',
       'Shopping':         '#3b82f6',
       'Fuel':             '#ca8a04',
