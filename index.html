@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.12</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.13</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1408,6 +1408,7 @@
             <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:8px">${fmtAUD(catTotal)} total · ${catTxs.length} transactions</span>
             <button onclick="selectCategory(null)" style="font-size:11px;padding:2px 8px;margin-left:12px;cursor:pointer;background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;color:var(--text-muted)">✕ Clear</button>
           </div>
+          <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Merchant breakdown</div>
           <div class="budget-panel-box">${catMerchRows || noData()}</div>
         </div>`;
       }
@@ -1546,7 +1547,8 @@
         let overviewDrill = '';
         if (budgetSelectedCategory) {
           const drillTxs = txs.filter(t => effectiveCat(t) === budgetSelectedCategory).sort((a, b) => b.date - a.date);
-          overviewDrill = `<div class="budget-tx-list" style="margin-bottom:24px">${renderTxRows(drillTxs)}</div>` + catDetailPanel;
+          overviewDrill = `<div class="budget-section-title" style="margin-bottom:10px">${budgetSelectedCategory} transactions</div>
+            <div class="budget-tx-list" style="margin-bottom:24px">${renderTxRows(drillTxs)}</div>` + catDetailPanel;
         } else if (budgetSelectedIncomeSource) {
           overviewDrill = incDetailPanel;
         }
@@ -1577,11 +1579,9 @@
         return dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
       }
 
-      let uncatCount = 0;
-      const rows = txs.map(t => {
+      return txs.map(t => {
         const merchant = cleanMerchant(t.narrative) || t.narrative;
         const cat = effectiveCat(t);
-        if (cat === 'Uncategorised') uncatCount++;
         const color = catColor(cat);
         const bal = t.balance ? `<div class="budget-tx-balance">${fmtAUD(t.balance)}</div>` : '';
         const narrAttr = t.narrative.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
@@ -1599,10 +1599,6 @@
           ${bal}
         </div>`;
       }).join('');
-      const debugBanner = uncatCount > 0
-        ? `<div style="padding:8px 16px;background:#D9775720;border-bottom:1px solid #D9775740;font-size:12px;color:#D97757;font-weight:600">⬇ ${uncatCount} uncategorised — click orange badge to categorise</div>`
-        : '';
-      return debugBanner + rows;
     }
 
     function filterTx(q) {
