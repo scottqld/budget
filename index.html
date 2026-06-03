@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.18</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.19</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -487,6 +487,9 @@
         [/\bato\b|aust.*tax.*office|australian\s*tax/,        'Tax'],
         [/\bpayg\b|\bbas\s*payment\b|business\s*activity\s*statement|instalment\s*notice/, 'Tax'],
         [/\bsrovic\b|state\s*revenue\s*office|land\s*tax/,    'Tax'],
+        // Salary / Wages
+        [/\bsalary\b|\bwages?\b|\bpayroll\b|\bpay\s*run\b/,    'Salary/Wages'],
+        [/\bemployer\b.*\bpay|\bpayslip\b/,                    'Salary/Wages'],
         [/\bcentrelink\b|services\s*australia/,                'Government'],
         [/\bqld\s*gov\b|\bnsw\s*gov\b|\bvic\s*gov\b|state\s*gov/,  'Government'],
         // Healthcare
@@ -583,7 +586,7 @@
       const dropdown = document.createElement('div');
       dropdown.className = 'cat-dropdown';
       dropdown.style.cssText = 'position:fixed;z-index:9999;background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.35);padding:4px;max-height:280px;overflow-y:auto;width:170px;font-family:inherit;';
-      Object.entries(CAT_COLORS).forEach(([cat, color]) => {
+      Object.entries(CAT_COLORS).sort(([a], [b]) => a === 'Uncategorised' ? 1 : b === 'Uncategorised' ? -1 : a.localeCompare(b)).forEach(([cat, color]) => {
         const item = document.createElement('div');
         item.style.cssText = `padding:6px 10px;cursor:pointer;border-radius:4px;font-size:12px;color:${color};font-weight:${cat === currentCat ? '700' : '400'};display:flex;align-items:center;gap:6px`;
         item.innerHTML = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>${cat}${cat === currentCat ? ' ✓' : ''}`;
@@ -681,6 +684,7 @@
     const CAT_COLORS = {
       'Groceries':        '#16a34a',
       'Eating Out':       '#f97316',
+      'Salary/Wages':     '#15803d',
       'Entertainment':    '#8b5cf6',
       'Shopping':         '#3b82f6',
       'Fuel':             '#ca8a04',
