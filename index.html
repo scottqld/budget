@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.21</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.22</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -430,8 +430,10 @@
 
     function autoCategory(narrative) {
       const raw = narrative.toLowerCase();
+      // Insert spaces at letter↔digit boundaries so patterns like \bkfc\b match "KFC1234"
+      const norm = raw.replace(/([a-z])(\d)/g, '$1 $2').replace(/(\d)([a-z])/g, '$1 $2').replace(/\s+/g, ' ').trim();
 
-      // BPAY context clues — checked before general patterns
+      // BPAY context clues — checked before general patterns (use raw for full context)
       const bpayPatterns = [
         [/bpay.*\bato\b|bpay.*tax.*office|bpay.*payg|bpay.*bas\b/,   'Tax'],
         [/bpay.*council|bpay.*shire|bpay.*rates/,                     'Council Rates'],
@@ -545,7 +547,7 @@
       ];
 
       for (const [re, cat] of patterns) {
-        if (re.test(raw)) return cat;
+        if (re.test(norm)) return cat;
       }
 
       // Fall back to merchant name lookup
