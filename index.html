@@ -197,7 +197,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.35</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.36</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -578,6 +578,7 @@
 
     let _manualCats = null;
     let _merchantCats = null;
+    let _catRenames = null;
     const _cleanCache = new Map();
     const _autoCatCache = new Map();
     const _effectiveCatCache = new Map();
@@ -590,8 +591,12 @@
       if (!_manualCats) try { _manualCats = JSON.parse(localStorage.getItem('budget_manual_cats') || '{}'); } catch { _manualCats = {}; }
       return _manualCats;
     }
+    function getCatRenames() {
+      if (!_catRenames) try { _catRenames = JSON.parse(localStorage.getItem('budget_cat_renames') || '{}'); } catch { _catRenames = {}; }
+      return _catRenames;
+    }
     function invalidateCatCache() {
-      _manualCats = null; _merchantCats = null; _autoCatCache.clear(); _effectiveCatCache.clear();
+      _manualCats = null; _merchantCats = null; _catRenames = null; _autoCatCache.clear(); _effectiveCatCache.clear();
     }
     function setCatOverride(narrative, cat) {
       const key = cleanMerchant(narrative) || narrative.trim().slice(0, 50);
@@ -715,6 +720,8 @@
         else if (t.category && t.category !== 'Uncategorised' && CAT_COLORS[t.category]) result = t.category;
         else result = 'Uncategorised';
       }
+      const renames = getCatRenames();
+      result = renames[result] || result;
       _effectiveCatCache.set(key, result);
       return result;
     }
@@ -761,6 +768,15 @@
     }
     // Merge saved custom categories into CAT_COLORS on startup
     Object.assign(CAT_COLORS, getCustomCats());
+    // Apply stored renames to CAT_COLORS so renamed built-ins get the right key
+    (function() {
+      const _sr = getCatRenames();
+      for (const [o, n] of Object.entries(_sr)) {
+        if (CAT_COLORS[o] !== undefined && CAT_COLORS[n] === undefined) {
+          CAT_COLORS[n] = CAT_COLORS[o]; delete CAT_COLORS[o];
+        }
+      }
+    })();
 
     function catColor(cat) { return CAT_COLORS[cat] || '#9ca3af'; }
     let budgetSelectedYear = null;
@@ -1717,7 +1733,7 @@
 
       // Categories tab: full grid of ALL defined categories, then drill-down
       const catSpendMap = Object.fromEntries(catSpending(txs));
-      const allDefinedCats = Object.keys(CAT_COLORS).filter(c => c !== 'Uncategorised' && c !== 'Other');
+      const allDefinedCats = Object.keys(CAT_COLORS).filter(c => c !== 'Uncategorised' && c !== 'Other').sort((a, b) => a.localeCompare(b));
       const uncatAmt = catSpendMap['Uncategorised'] || 0;
       const catCards = allDefinedCats.map(cat => {
         const amt = catSpendMap[cat] || 0;
@@ -1730,6 +1746,7 @@
           <div style="display:flex;align-items:center;gap:8px">
             <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
             <span style="font-size:12px;font-weight:600;color:var(--text-primary);flex:1">${cat}</span>
+            <button onclick="event.stopPropagation();showRenameCategoryModal('${esc}')" style="background:none;border:none;padding:0;cursor:pointer;font-size:12px;color:var(--text-muted);line-height:1" title="Rename category">✏</button>
             <button onclick="event.stopPropagation();toggleExcludedCat('${esc}')" style="background:none;border:none;padding:0;cursor:pointer;font-size:13px;color:${excluded ? '#ef4444' : 'var(--text-muted)'};line-height:1" title="${excluded ? 'Excluded from trends — click to include' : 'Exclude from trends'}">⊘</button>
           </div>
           <div style="font-size:18px;font-weight:700;color:${amt > 0 ? color : 'var(--text-muted)'}">${amt > 0 ? fmtAUD(amt) : '—'}</div>
@@ -2117,6 +2134,89 @@
       renderBudget();
     }
 
+    let _renamingCat = null;
+    function showRenameCategoryModal(cat) {
+      document.querySelectorAll('.rename-cat-modal').forEach(d => d.remove());
+      _renamingCat = cat;
+      const overlay = document.createElement('div');
+      overlay.className = 'rename-cat-modal';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center';
+      overlay.innerHTML = `<div style="background:var(--bg-card);border-radius:12px;padding:24px;width:340px;box-shadow:0 8px 40px rgba(0,0,0,.3);font-family:inherit">
+        <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:16px">Rename category</div>
+        <div style="margin-bottom:20px">
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:6px">New name</label>
+          <input id="catRenameInput" type="text" value="${cat.replace(/"/g, '&quot;')}" style="width:100%;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;color:var(--text-primary);font-family:inherit;outline:none;box-sizing:border-box">
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button onclick="this.closest('.rename-cat-modal').remove()" style="font-size:13px;padding:7px 16px">Cancel</button>
+          <button onclick="saveRenameCategory()" class="primary" style="font-size:13px;padding:7px 16px">Rename</button>
+        </div>
+      </div>`;
+      overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+      document.body.appendChild(overlay);
+      const input = document.getElementById('catRenameInput');
+      input.focus();
+      input.select();
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') saveRenameCategory(); if (e.key === 'Escape') overlay.remove(); });
+    }
+
+    function saveRenameCategory() {
+      const newName = (document.getElementById('catRenameInput')?.value || '').trim();
+      const oldName = _renamingCat;
+      if (!newName) { document.getElementById('catRenameInput')?.focus(); return; }
+      if (newName === oldName) { document.querySelectorAll('.rename-cat-modal').forEach(d => d.remove()); return; }
+      if (CAT_COLORS[newName]) { showStatus(`"${newName}" already exists`); return; }
+      document.querySelectorAll('.rename-cat-modal').forEach(d => d.remove());
+      applyRenameCategory(oldName, newName);
+    }
+
+    function applyRenameCategory(oldName, newName) {
+      // Update runtime CAT_COLORS
+      if (CAT_COLORS[oldName] !== undefined) {
+        CAT_COLORS[newName] = CAT_COLORS[oldName];
+        delete CAT_COLORS[oldName];
+      }
+      // Update custom cats storage
+      const custom = getCustomCats();
+      if (custom[oldName] !== undefined) {
+        custom[newName] = custom[oldName];
+        delete custom[oldName];
+        localStorage.setItem('budget_custom_cats', JSON.stringify(custom));
+      }
+      // Record rename for built-in cats (effectiveCat remapping) — chain through existing renames
+      const renames = getCatRenames();
+      // If oldName was itself a rename target, update the chain
+      for (const [k, v] of Object.entries(renames)) {
+        if (v === oldName) renames[k] = newName;
+      }
+      renames[oldName] = newName;
+      localStorage.setItem('budget_cat_renames', JSON.stringify(renames));
+      // Update manual overrides that reference oldName
+      const manual = getManualCats();
+      let manualChanged = false;
+      for (const [k, v] of Object.entries(manual)) {
+        if (v === oldName) { manual[k] = newName; manualChanged = true; }
+      }
+      if (manualChanged) localStorage.setItem('budget_manual_cats', JSON.stringify(manual));
+      // Update budget limits
+      if (budgetLimits[oldName] !== undefined) {
+        budgetLimits[newName] = budgetLimits[oldName];
+        delete budgetLimits[oldName];
+        saveBudgetLimits();
+      }
+      // Update exclusions
+      if (NON_EXPENSE_CATS.has(oldName)) {
+        NON_EXPENSE_CATS.delete(oldName);
+        NON_EXPENSE_CATS.add(newName);
+        localStorage.setItem('budget_excluded_cats', JSON.stringify([...NON_EXPENSE_CATS]));
+      }
+      // Update selected category if needed
+      if (budgetSelectedCategory === oldName) budgetSelectedCategory = newName;
+      invalidateCatCache();
+      showStatus(`Renamed "${oldName}" → "${newName}"`);
+      renderBudget();
+    }
+
     async function deleteTx(id) {
       if (!confirm('Delete this transaction? This cannot be undone.')) return;
       const db = await openDB();
@@ -2149,6 +2249,8 @@
     window.exportCSV = exportCSV;
     window.showAddCategoryModal = showAddCategoryModal;
     window.saveNewCategory = saveNewCategory;
+    window.showRenameCategoryModal = showRenameCategoryModal;
+    window.saveRenameCategory = saveRenameCategory;
 
     document.addEventListener('click', function(e) {
       const badge = e.target.closest('.budget-tx-cat-badge');
