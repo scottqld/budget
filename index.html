@@ -188,7 +188,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.38</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.39</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1844,7 +1844,7 @@
         });
         const catWcItems = Object.entries(catWcData)
           .map(([cat, val]) => ({ name: cat, value: val, color: catColor(cat) }))
-          .sort((a, b) => b.value - a.value).slice(0, 20);
+          .sort((a, b) => b.value - a.value);
 
         // Vendor word cloud — all-time totals, colored by dominant category
         const vendorWcData = {};
@@ -1865,12 +1865,12 @@
             const domCat = Object.entries(vendorCatMap[vendor] || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Other';
             return { name: vendor, value: val, color: catColor(domCat) };
           })
-          .sort((a, b) => b.value - a.value).slice(0, 25);
+          .sort((a, b) => b.value - a.value);
 
         const catWcPanel    = sec('catheat',  'Category spend', `<div class="budget-panel-box" style="padding:12px 16px">${buildWordCloud(catWcItems)}</div>`);
         const vendorWcPanel = sec('vendheat', 'Vendor spend',   `<div class="budget-panel-box" style="padding:12px 16px">${buildWordCloud(vendorWcItems)}</div>`);
 
-        tabContent = cards + balPanel + annualPanel + trendPanel + catWcPanel + vendorWcPanel;
+        tabContent = catWcPanel + vendorWcPanel + cards + balPanel + annualPanel + trendPanel;
       } else if (budgetSelectedTab === 'recurring') {
         tabContent = recurPanel;
       }
@@ -1884,11 +1884,11 @@
 
     function buildWordCloud(items) {
       if (!items.length) return '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:13px">Not enough data</div>';
-      const W = 620, H = 290;
+      const W = 620, H = 200;
       const maxVal = items[0].value, minVal = items[items.length - 1].value;
       const logMax = Math.log(maxVal + 1), logMin = Math.log(minVal + 1);
       const logRange = logMax - logMin;
-      const minSz = 12, maxSz = 52;
+      const minSz = 10, maxSz = 36;
       function sz(val) {
         return Math.round(logRange < 0.01 ? (minSz + maxSz) / 2 : minSz + ((Math.log(val + 1) - logMin) / logRange) * (maxSz - minSz));
       }
@@ -1920,7 +1920,7 @@
         }
         if (!ok) continue;
         placed.push({ x: px, y: py, w, h });
-        const fw = size >= 28 ? 700 : 600;
+        const fw = size >= 20 ? 700 : 600;
         const esc = name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         svgWords.push(`<text x="${px.toFixed(1)}" y="${py.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" font-size="${size}" font-weight="${fw}" fill="${color}" font-family="inherit" style="cursor:default;user-select:none"><title>${esc}: ${fmtAUD(value)}</title>${esc}</text>`);
       }
