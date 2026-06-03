@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.28</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.29</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1348,15 +1348,9 @@
           const best = mdata.reduce((b, d) => d.net > b.net ? d : b);
           const worst = mdata.reduce((w, d) => d.net < w.net ? d : w);
           const avgSav = mdata.reduce((s, d) => s + d.net, 0) / mdata.length;
-          const topCats3 = catSpending(txs).slice(0, 3);
-          const maxTop = topCats3[0]?.[1] || 1;
-          const topCatsHtml = topCats3.map(([cat, amt]) => {
-            const color = catColor(cat);
-            return `<div class="budget-bar-row"><div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div><div class="budget-bar-label">${cat}</div><div class="budget-bar-wrap"><div class="budget-bar" style="width:${(amt/maxTop)*100}%;background:${color}"></div></div><div class="budget-bar-amount">${fmtAUD(amt)}</div></div>`;
-          }).join('');
           annualSummaryPanel = `<div style="margin-bottom:16px">
             <div class="budget-section-title" style="margin-bottom:10px">${budgetSelectedYear} summary</div>
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:${topCatsHtml ? '12' : '0'}px">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
               <div class="budget-panel-box">
                 <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Best month</div>
                 <div style="font-size:14px;font-weight:600;color:var(--text-primary)">${fmtMonth(best.m)}</div>
@@ -1372,7 +1366,6 @@
                 <div style="font-size:20px;font-weight:700;color:${avgSav >= 0 ? '#16a34a' : '#ef4444'}">${avgSav >= 0 ? '+' : '−'}${fmtAUD(Math.abs(avgSav))}</div>
               </div>
             </div>
-            ${topCatsHtml ? '<div class="budget-section-title" style="margin-bottom:6px">Top spending categories</div><div class="budget-panel-box" style="padding:8px 16px">' + topCatsHtml + '</div>' : ''}
           </div>`;
         }
       }
