@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.22</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.23</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -510,7 +510,7 @@
         [/\bspecialist\b|\bclinic\b|\bmedical\b|\bhealth\s*care\b/, 'Healthcare'],
         [/\bpharmacy\b|\bchemist\s*warehouse\b|\bpriceline\b|\bchemist\b/,  'Healthcare'],
         // Health Insurance (before generic insurance)
-        [/\bmedibank\b|\bbupa\b|\bhcf\b|\bnib\b|\bahm\b|\bhbf\b/, 'Health Insurance'],
+        [/\bmedibank\b|\bbupa\b|\bhcf(?:health)?\b|\bnib\b|\bahm\b|\bhbf\b/, 'Health Insurance'],
         [/teachers\s*health|police\s*health|cua\s*health|frank\s*health/, 'Health Insurance'],
         [/health\s*insurance|health\s*fund/,                  'Health Insurance'],
         // Fitness
@@ -1045,6 +1045,7 @@
         .replace(/^(osko\s+(payment\s+to\s+)?|npp\s+(credit|debit)\s+)/i, '')
         .replace(/^(paypal|sq)\s*\*\s*/i, '')
         .replace(/^direct\s+debit\s+/i, '')
+        .replace(/^payment\s+by\s+authority\s+to\s+/i, '')
         .replace(/^bpay\s+/i, '')
         .replace(/^(atm\s+withdrawal\s+|atm\s+)/i, '')
         // legal suffixes
