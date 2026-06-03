@@ -197,7 +197,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.33</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.34</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -258,7 +258,9 @@
     };
     function acctName(id) { return ACCOUNT_NAMES[id] || id; }
     const EXCLUDED_ACCOUNTS = new Set(['9962', '033040289567']); // Platinum Mastercard, Westpac eSaver
-    const NON_EXPENSE_CATS = new Set(['Bank Transfers']); // excluded from trend/totals charts
+    let NON_EXPENSE_CATS;
+    try { NON_EXPENSE_CATS = new Set(JSON.parse(localStorage.getItem('budget_excluded_cats') || '["Bank Transfers"]')); }
+    catch { NON_EXPENSE_CATS = new Set(['Bank Transfers']); }
     const _acctPalette = ['#D97757', '#3b82f6', '#16a34a', '#f59e0b', '#8b5cf6', '#ec4899'];
     function acctColor(id) {
       const all = [...new Set(budgetTransactions.map(t => t.account))].filter(Boolean).sort();
@@ -1756,6 +1758,8 @@
         const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const lim = budgetLimits[cat];
         const over = lim && amt > lim;
+        const excluded = NON_EXPENSE_CATS.has(cat);
+        const excBtn = `<button onclick="event.stopPropagation();toggleExcludedCat('${esc}')" style="font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid ${excluded ? '#ef4444' : 'var(--border)'};background:none;color:${excluded ? '#ef4444' : 'var(--text-muted)'};cursor:pointer" title="${excluded ? 'Excluded from trends — click to include' : 'Exclude from trends'}">${excluded ? '⊘ Excluded' : '⊘ Exclude'}</button>`;
         return `<div class="budget-bar-row" onclick="selectCategory('${esc}')" style="cursor:pointer">
           <div class="budget-rank">${i + 1}</div>
           <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div>
@@ -1763,6 +1767,7 @@
           <div class="budget-bar-wrap"><div class="budget-bar${over ? ' over' : ''}" style="width:${(amt/maxTopSpend)*100}%;background:${over ? '#ef4444' : color}"></div></div>
           <div class="budget-bar-amount">${fmtAUD(amt)}</div>
           <div class="budget-bar-extra">${lim ? `<span class="${over ? 'over' : 'under'}">${over ? '⚠ ' : ''}/ ${fmtAUD(lim)}</span>` : ''}</div>
+          <div style="flex:0 0 74px;text-align:right">${excBtn}</div>
         </div>`;
       }).join('');
       const topSpendPanel = topSpendCats.length ? `<div style="margin-bottom:24px">
@@ -2132,6 +2137,14 @@
     window.selectYear = selectYear;
     window.selectCategory = selectCategory;
     window.selectDrillTab = selectDrillTab;
+    function toggleExcludedCat(cat) {
+      if (NON_EXPENSE_CATS.has(cat)) NON_EXPENSE_CATS.delete(cat);
+      else NON_EXPENSE_CATS.add(cat);
+      localStorage.setItem('budget_excluded_cats', JSON.stringify([...NON_EXPENSE_CATS]));
+      renderBudget();
+    }
+
+    window.toggleExcludedCat = toggleExcludedCat;
     window.setLimit = setLimit;
     window.filterTx = filterTx;
     window.exportCSV = exportCSV;
