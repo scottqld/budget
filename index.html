@@ -188,7 +188,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.47</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.48</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -249,9 +249,16 @@
     };
     function acctName(id) { return ACCOUNT_NAMES[id] || id; }
     const EXCLUDED_ACCOUNTS = new Set(['9962', '033040289567']); // Platinum Mastercard, Westpac eSaver
+    const _DEFAULT_EXCLUDED = ['Bank Transfers', 'Salary/Wages'];
     let NON_EXPENSE_CATS;
-    try { NON_EXPENSE_CATS = new Set(JSON.parse(localStorage.getItem('budget_excluded_cats') || '["Bank Transfers"]')); }
-    catch { NON_EXPENSE_CATS = new Set(['Bank Transfers']); }
+    try {
+      let _excArr = JSON.parse(localStorage.getItem('budget_excluded_cats') || JSON.stringify(_DEFAULT_EXCLUDED));
+      // Migrate: ensure built-in income categories are always present
+      let _changed = false;
+      _DEFAULT_EXCLUDED.forEach(c => { if (!_excArr.includes(c)) { _excArr.push(c); _changed = true; } });
+      if (_changed) localStorage.setItem('budget_excluded_cats', JSON.stringify(_excArr));
+      NON_EXPENSE_CATS = new Set(_excArr);
+    } catch { NON_EXPENSE_CATS = new Set(_DEFAULT_EXCLUDED); }
     const _acctPalette = ['#D97757', '#3b82f6', '#16a34a', '#f59e0b', '#8b5cf6', '#ec4899'];
     function acctColor(id) {
       const all = [...new Set(budgetTransactions.map(t => t.account))].filter(Boolean).sort();
