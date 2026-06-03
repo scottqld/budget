@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.11</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.12</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1526,9 +1526,9 @@
       let catTabContent = catGrid;
       if (budgetSelectedCategory) {
         const catTxsSorted = txs.filter(t => effectiveCat(t) === budgetSelectedCategory).slice().sort((a, b) => b.date - a.date);
-        catTabContent += catDetailPanel;
         catTabContent += `<div class="budget-section-title" style="margin-bottom:10px">${budgetSelectedCategory} transactions</div>
           <div class="budget-tx-list">${renderTxRows(catTxsSorted)}</div>`;
+        catTabContent += catDetailPanel;
       }
 
       const tabs = `<div class="budget-tabs">
@@ -1546,7 +1546,7 @@
         let overviewDrill = '';
         if (budgetSelectedCategory) {
           const drillTxs = txs.filter(t => effectiveCat(t) === budgetSelectedCategory).sort((a, b) => b.date - a.date);
-          overviewDrill = catDetailPanel + `<div class="budget-tx-list" style="margin-bottom:24px">${renderTxRows(drillTxs)}</div>`;
+          overviewDrill = `<div class="budget-tx-list" style="margin-bottom:24px">${renderTxRows(drillTxs)}</div>` + catDetailPanel;
         } else if (budgetSelectedIncomeSource) {
           overviewDrill = incDetailPanel;
         }
