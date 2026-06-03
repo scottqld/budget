@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.25</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.26</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1325,6 +1325,49 @@
         </div>`;
       }
 
+      // Annual summary panel (shown when year selected but no specific month)
+      let annualSummaryPanel = '';
+      if (budgetSelectedYear && !budgetSelectedMonth) {
+        const mdata = allMonths().filter(m => m.startsWith(budgetSelectedYear)).map(m => {
+          let mTxs = budgetTransactions.filter(t => t.month === m);
+          if (budgetSelectedAccount) mTxs = mTxs.filter(t => t.account === budgetSelectedAccount);
+          const inc = mTxs.reduce((s, t) => s + t.credit, 0);
+          const exp = mTxs.reduce((s, t) => s + t.debit, 0);
+          return { m, inc, exp, net: inc - exp };
+        }).filter(d => d.inc > 0 || d.exp > 0);
+        if (mdata.length >= 2) {
+          const best = mdata.reduce((b, d) => d.net > b.net ? d : b);
+          const worst = mdata.reduce((w, d) => d.net < w.net ? d : w);
+          const avgSav = mdata.reduce((s, d) => s + d.net, 0) / mdata.length;
+          const topCats3 = catSpending(txs).slice(0, 3);
+          const maxTop = topCats3[0]?.[1] || 1;
+          const topCatsHtml = topCats3.map(([cat, amt]) => {
+            const color = catColor(cat);
+            return `<div class="budget-bar-row"><div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div><div class="budget-bar-label">${cat}</div><div class="budget-bar-wrap"><div class="budget-bar" style="width:${(amt/maxTop)*100}%;background:${color}"></div></div><div class="budget-bar-amount">${fmtAUD(amt)}</div></div>`;
+          }).join('');
+          annualSummaryPanel = `<div style="margin-bottom:16px">
+            <div class="budget-section-title" style="margin-bottom:10px">${budgetSelectedYear} summary</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:${topCatsHtml ? '12' : '0'}px">
+              <div class="budget-panel-box">
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Best month</div>
+                <div style="font-size:14px;font-weight:600;color:var(--text-primary)">${fmtMonth(best.m)}</div>
+                <div style="font-size:13px;color:#16a34a;font-weight:600">+${fmtAUD(best.net)}</div>
+              </div>
+              <div class="budget-panel-box">
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Worst month</div>
+                <div style="font-size:14px;font-weight:600;color:var(--text-primary)">${fmtMonth(worst.m)}</div>
+                <div style="font-size:13px;font-weight:600;color:${worst.net < 0 ? '#ef4444' : '#16a34a'}">${worst.net >= 0 ? '+' : '−'}${fmtAUD(Math.abs(worst.net))}</div>
+              </div>
+              <div class="budget-panel-box">
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Avg monthly savings</div>
+                <div style="font-size:20px;font-weight:700;color:${avgSav >= 0 ? '#16a34a' : '#ef4444'}">${avgSav >= 0 ? '+' : '−'}${fmtAUD(Math.abs(avgSav))}</div>
+              </div>
+            </div>
+            ${topCatsHtml ? '<div class="budget-section-title" style="margin-bottom:6px">Top spending categories</div><div class="budget-panel-box" style="padding:8px 16px">' + topCatsHtml + '</div>' : ''}
+          </div>`;
+        }
+      }
+
       // Previous month category totals for month-over-month deltas
       let prevMonthCats = null;
       if (budgetSelectedMonth) {
@@ -1556,10 +1599,16 @@
       const txTitle = budgetSelectedCategory
         ? `${budgetSelectedCategory} transactions`
         : `Transactions${sorted.length > 200 ? ' (200 most recent)' : ''}`;
-      const txPanel = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div class="budget-section-title" style="margin-bottom:0">${txTitle}</div>
-        <input type="text" id="txSearch" placeholder="Search narrative or category…" oninput="filterTx(this.value)"
-          style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px;color:var(--text-primary);font-family:inherit;width:220px;">
+      const txPanel = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="budget-section-title" style="margin-bottom:0">${txTitle}</div>
+          <span id="txSearchCount" style="font-size:11px;color:var(--accent);font-weight:500"></span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button onclick="exportCSV()" style="font-size:11px;padding:4px 10px;cursor:pointer">↓ Export CSV</button>
+          <input type="text" id="txSearch" placeholder="Search all time…" oninput="filterTx(this.value)"
+            style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px;color:var(--text-primary);font-family:inherit;width:200px;">
+        </div>
       </div>
       <div class="budget-tx-list" id="txList">${txRows}</div>`;
 
@@ -1657,6 +1706,24 @@
 
       document.getElementById('stickyBar').innerHTML = acctSel + yearSel + monthSel + tabs;
 
+      // Spending alerts — shown when any category exceeds its budget limit
+      const overBudgetCats = cats.filter(([cat, amt]) => budgetLimits[cat] && amt > budgetLimits[cat]);
+      let spendingAlerts = '';
+      if (overBudgetCats.length > 0) {
+        const alertItems = overBudgetCats.map(([cat, amt]) => {
+          const lim = budgetLimits[cat];
+          const color = catColor(cat);
+          const pct = Math.round((amt / lim - 1) * 100);
+          const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          return `<span onclick="selectOverviewCategory('${esc}')" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:3px 8px;font-size:12px"><span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span><span style="font-weight:600;color:#dc2626">${cat}</span> <span style="color:#ef4444">${fmtAUD(amt)}</span><span style="color:#9ca3af;font-size:10px">&nbsp;/ ${fmtAUD(lim)} (+${pct}%)</span></span>`;
+        }).join('');
+        spendingAlerts = `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span style="font-size:12px;font-weight:700;color:#dc2626;flex-shrink:0">⚠ Over budget:</span>${alertItems}</div>`;
+      }
+
+      // Largest transactions panel for the Transactions tab
+      const largestTxs = filtered().filter(t => t.debit > 0).sort((a, b) => b.debit - a.debit).slice(0, 15);
+      const largestTxPanel = sec('largest', 'Largest transactions', `<div class="budget-tx-list">${renderTxRows(largestTxs)}</div>`);
+
       let tabContent = '';
       if (budgetSelectedTab === 'overview') {
         let overviewDrill = '';
@@ -1665,11 +1732,11 @@
         } else if (budgetSelectedIncomeSource) {
           overviewDrill = incDetailPanel;
         }
-        tabContent = cards + savingsPanel + comparePanel + overviewDrill;
+        tabContent = spendingAlerts + cards + savingsPanel + annualSummaryPanel + comparePanel + overviewDrill;
       } else if (budgetSelectedTab === 'categories') {
         tabContent = catTabContent;
       } else if (budgetSelectedTab === 'transactions') {
-        tabContent = catDetailPanel + merchPanel + txPanel + sourcesHtml;
+        tabContent = catDetailPanel + merchPanel + largestTxPanel + txPanel + sourcesHtml;
       } else if (budgetSelectedTab === 'trends') {
         tabContent = cards + balPanel + annualPanel + trendPanel;
       } else if (budgetSelectedTab === 'recurring') {
@@ -1715,12 +1782,43 @@
     }
 
     function filterTx(q) {
-      const ql = q.toLowerCase();
-      let txs = filtered().slice().sort((a, b) => b.date - a.date);
-      if (budgetSelectedCategory) txs = txs.filter(t => effectiveCat(t) === budgetSelectedCategory);
-      const rows = q ? txs.filter(t =>
-        t.narrative.toLowerCase().includes(ql) || effectiveCat(t).toLowerCase().includes(ql)) : txs;
-      document.getElementById('txList').innerHTML = renderTxRows(rows.slice(0, 200));
+      const ql = q.trim().toLowerCase();
+      const countEl = document.getElementById('txSearchCount');
+      if (!ql) {
+        let txs = filtered().slice().sort((a, b) => b.date - a.date);
+        if (budgetSelectedCategory) txs = txs.filter(t => effectiveCat(t) === budgetSelectedCategory);
+        if (countEl) countEl.textContent = '';
+        document.getElementById('txList').innerHTML = renderTxRows(txs.slice(0, 200));
+        return;
+      }
+      // Search across ALL transactions (account-filtered only)
+      let allTxs = budgetTransactions;
+      if (budgetSelectedAccount) allTxs = allTxs.filter(t => t.account === budgetSelectedAccount);
+      const results = allTxs.filter(t =>
+        t.narrative.toLowerCase().includes(ql) ||
+        effectiveCat(t).toLowerCase().includes(ql) ||
+        (cleanMerchant(t.narrative) || '').toLowerCase().includes(ql)
+      ).sort((a, b) => b.date - a.date);
+      if (countEl) countEl.textContent = results.length === 0 ? 'No results' : `${results.length} result${results.length !== 1 ? 's' : ''} across all time`;
+      document.getElementById('txList').innerHTML = renderTxRows(results.slice(0, 300));
+    }
+
+    function exportCSV() {
+      const txs = filtered().slice().sort((a, b) => b.date - a.date);
+      const rows = [['Date', 'Narrative', 'Category', 'Debit', 'Credit', 'Balance', 'Account']];
+      txs.forEach(t => {
+        rows.push([t.dateStr, '"' + t.narrative.replace(/"/g, '""') + '"', effectiveCat(t), t.debit || '', t.credit || '', t.balance || '', acctName(t.account)]);
+      });
+      const csv = rows.map(r => r.join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const period = budgetSelectedMonth || (budgetSelectedYear ? budgetSelectedYear : 'all-time');
+      a.download = `budget-${period}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showStatus(`Exported ${txs.length} transactions`);
     }
 
     function toggleSettings() {
@@ -1819,6 +1917,7 @@
     window.selectDrillTab = selectDrillTab;
     window.setLimit = setLimit;
     window.filterTx = filterTx;
+    window.exportCSV = exportCSV;
 
     document.addEventListener('click', function(e) {
       const badge = e.target.closest('.budget-tx-cat-badge');
