@@ -188,7 +188,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.50</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.51</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1101,18 +1101,18 @@
       return '$' + Math.abs(n).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    function catSpending(txs) {
+    function catSpending(txs, inclUnaccounted = false) {
       const m = {};
-      txs.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); if (c === 'Uncategorised') return; m[c] = (m[c] || 0) + t.debit; } });
+      txs.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); if (!inclUnaccounted && c === 'Uncategorised') return; m[c] = (m[c] || 0) + t.debit; } });
       return Object.entries(m).sort((a, b) => b[1] - a[1]);
     }
 
-    function avgMonthlyCatSpending() {
+    function avgMonthlyCatSpending(inclUnaccounted = false) {
       let base = budgetTransactions;
       if (budgetSelectedAccount) base = base.filter(t => t.account === budgetSelectedAccount);
       const numMonths = new Set(base.map(t => t.month)).size || 1;
       const totals = {};
-      base.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); if (c === 'Uncategorised') return; totals[c] = (totals[c] || 0) + t.debit; } });
+      base.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); if (!inclUnaccounted && c === 'Uncategorised') return; totals[c] = (totals[c] || 0) + t.debit; } });
       const avgs = {};
       for (const [cat, total] of Object.entries(totals)) avgs[cat] = total / numMonths;
       return avgs;
@@ -1431,8 +1431,9 @@
       const txs = filtered();
       const months = allMonths();
       const years = allYears();
-      const totalInc = txs.reduce((s, t) => effectiveCat(t) !== 'Uncategorised' ? s + t.credit : s, 0);
-      const totalExp = txs.reduce((s, t) => effectiveCat(t) !== 'Uncategorised' ? s + t.debit : s, 0);
+      const inclUnaccounted = budgetSelectedTab === 'all';
+      const totalInc = txs.reduce((s, t) => (inclUnaccounted || effectiveCat(t) !== 'Uncategorised') ? s + t.credit : s, 0);
+      const totalExp = txs.reduce((s, t) => (inclUnaccounted || effectiveCat(t) !== 'Uncategorised') ? s + t.debit : s, 0);
       const net = totalInc - totalExp;
 
       const allAccounts = [...new Set(budgetTransactions.map(t => t.account))].filter(Boolean).sort();
@@ -1465,7 +1466,7 @@
         const monthlyData = allMonths().filter(m => m.startsWith(budgetSelectedYear)).reverse().map(m => {
           let mTxs = budgetTransactions.filter(t => t.month === m);
           if (budgetSelectedAccount) mTxs = mTxs.filter(t => t.account === budgetSelectedAccount);
-          mTxs = mTxs.filter(t => effectiveCat(t) !== 'Uncategorised');
+          if (!inclUnaccounted) mTxs = mTxs.filter(t => effectiveCat(t) !== 'Uncategorised');
           const inc = mTxs.reduce((s, t) => s + t.credit, 0);
           const exp = mTxs.reduce((s, t) => s + t.debit, 0);
           return { m, inc, exp, net: inc - exp };
@@ -1501,7 +1502,7 @@
         const mdata = allMonths().filter(m => m.startsWith(budgetSelectedYear)).map(m => {
           let mTxs = budgetTransactions.filter(t => t.month === m);
           if (budgetSelectedAccount) mTxs = mTxs.filter(t => t.account === budgetSelectedAccount);
-          mTxs = mTxs.filter(t => effectiveCat(t) !== 'Uncategorised');
+          if (!inclUnaccounted) mTxs = mTxs.filter(t => effectiveCat(t) !== 'Uncategorised');
           const inc = mTxs.reduce((s, t) => s + t.credit, 0);
           const exp = mTxs.reduce((s, t) => s + t.debit, 0);
           return { m, inc, exp, net: inc - exp };
@@ -1540,12 +1541,12 @@
         const prevMonth = `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, '0')}`;
         let prevTxs = budgetTransactions.filter(t => t.month === prevMonth);
         if (budgetSelectedAccount) prevTxs = prevTxs.filter(t => t.account === budgetSelectedAccount);
-        prevMonthCats = Object.fromEntries(catSpending(prevTxs));
+        prevMonthCats = Object.fromEntries(catSpending(prevTxs, inclUnaccounted));
       }
 
-      const cats = catSpending(txs);
+      const cats = catSpending(txs, inclUnaccounted);
       const maxCat = cats[0]?.[1] || 1;
-      const avgCat = budgetSelectedMonth ? avgMonthlyCatSpending() : null;
+      const avgCat = budgetSelectedMonth ? avgMonthlyCatSpending(inclUnaccounted) : null;
       const catRows = cats.map(([cat, amt]) => {
         const lim = budgetLimits[cat];
         const over = lim && amt > lim;
@@ -1891,6 +1892,7 @@
 
       const tabs = `<div class="budget-tabs">
         <button class="budget-tab${budgetSelectedTab==='overview'?' active':''}" onclick="selectTab('overview')">Overview</button>
+        <button class="budget-tab${budgetSelectedTab==='all'?' active':''}" onclick="selectTab('all')">All</button>
         <button class="budget-tab${budgetSelectedTab==='categories'?' active':''}" onclick="selectTab('categories')">Categories</button>
         <button class="budget-tab${budgetSelectedTab==='transactions'?' active':''}" onclick="selectTab('transactions')">Transactions</button>
         <button class="budget-tab${budgetSelectedTab==='trends'?' active':''}" onclick="selectTab('trends')">Trends</button>
@@ -1919,7 +1921,7 @@
       const largestTxPanel = sec('largest', 'Largest transactions', `<div class="budget-tx-list">${renderTxRows(largestTxs)}</div>`);
 
       let tabContent = '';
-      if (budgetSelectedTab === 'overview') {
+      if (budgetSelectedTab === 'overview' || budgetSelectedTab === 'all') {
         let overviewDrill = '';
         if (budgetSelectedCategory) {
           overviewDrill = catDrillPanel;
