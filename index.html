@@ -1704,7 +1704,29 @@
       </div>`;
       const catGrid = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px">${catCards}${uncatCard}${addCatCard}</div>`;
 
-      let catTabContent = catGrid;
+      // Top spending categories panel for the Categories tab
+      const topSpendCats = catSpending(txs).filter(([, amt]) => amt > 0).slice(0, 10);
+      const maxTopSpend = topSpendCats[0]?.[1] || 1;
+      const topSpendRows = topSpendCats.map(([cat, amt], i) => {
+        const color = catColor(cat);
+        const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const lim = budgetLimits[cat];
+        const over = lim && amt > lim;
+        return `<div class="budget-bar-row" onclick="selectCategory('${esc}')" style="cursor:pointer">
+          <div class="budget-rank">${i + 1}</div>
+          <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div>
+          <div class="budget-bar-label">${cat}</div>
+          <div class="budget-bar-wrap"><div class="budget-bar${over ? ' over' : ''}" style="width:${(amt/maxTopSpend)*100}%;background:${over ? '#ef4444' : color}"></div></div>
+          <div class="budget-bar-amount">${fmtAUD(amt)}</div>
+          <div class="budget-bar-extra">${lim ? `<span class="${over ? 'over' : 'under'}">${over ? '⚠ ' : ''}/ ${fmtAUD(lim)}</span>` : ''}</div>
+        </div>`;
+      }).join('');
+      const topSpendPanel = topSpendCats.length ? `<div style="margin-bottom:24px">
+        <div class="budget-section-title" style="margin-bottom:10px">Top spending categories</div>
+        <div class="budget-panel-box">${topSpendRows}</div>
+      </div>` : '';
+
+      let catTabContent = topSpendPanel + catGrid;
       if (budgetSelectedCategory) {
         catTabContent += catDrillPanel;
       }
