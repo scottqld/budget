@@ -188,7 +188,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.46</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.47</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -781,6 +781,7 @@
     let budgetSelectedAccount = null;
     let budgetSelectedTab = 'overview';
     let budgetDrillTab = 'transactions';
+    let budgetBudgetCat = null;
 
     try { budgetLimits = JSON.parse(localStorage.getItem('budget_limits') || '{}'); } catch { budgetLimits = {}; }
 
@@ -1888,6 +1889,7 @@
         <button class="budget-tab${budgetSelectedTab==='categories'?' active':''}" onclick="selectTab('categories')">Categories</button>
         <button class="budget-tab${budgetSelectedTab==='transactions'?' active':''}" onclick="selectTab('transactions')">Transactions</button>
         <button class="budget-tab${budgetSelectedTab==='trends'?' active':''}" onclick="selectTab('trends')">Trends</button>
+        <button class="budget-tab${budgetSelectedTab==='budget'?' active':''}" onclick="selectTab('budget')">Budget</button>
         <button class="budget-tab${budgetSelectedTab==='recurring'?' active':''}" onclick="selectTab('recurring')">Recurring</button>
       </div>`;
 
@@ -1963,6 +1965,143 @@
         const vendorHeatPanel = sec('vendheat', 'Vendor heatmap',   `<div class="budget-panel-box" style="padding:12px 16px">${buildHeatmap(vendorHeatRows, heatMonths)}</div>`);
 
         tabContent = catHeatPanel + vendorHeatPanel + cards + balPanel + annualPanel + trendPanel;
+      } else if (budgetSelectedTab === 'budget') {
+        const budgetYears = [...new Set(budgetTransactions.map(t => t.month.split('-')[0]))].sort();
+
+        // Per-category per-year spend totals
+        const catYearData = {};
+        let bBase = budgetTransactions;
+        if (budgetSelectedAccount) bBase = bBase.filter(t => t.account === budgetSelectedAccount);
+        bBase.forEach(t => {
+          if (t.debit <= 0) return;
+          const cat = effectiveCat(t);
+          if (NON_EXPENSE_CATS.has(cat) || cat === 'Uncategorised') return;
+          const yr = t.month.split('-')[0];
+          if (!catYearData[cat]) catYearData[cat] = {};
+          catYearData[cat][yr] = (catYearData[cat][yr] || 0) + t.debit;
+        });
+
+        const allBaseMonths = [...new Set(bBase.map(t => t.month))].sort();
+        const numBaseMonths = allBaseMonths.length || 1;
+
+        const sortedBudgetCats = Object.entries(catYearData)
+          .map(([cat, yd]) => ({ cat, total: Object.values(yd).reduce((s, v) => s + v, 0) }))
+          .sort((a, b) => b.total - a.total);
+
+        const yearTotalMap = {};
+        budgetYears.forEach(yr => {
+          yearTotalMap[yr] = sortedBudgetCats.reduce((s, { cat }) => s + (catYearData[cat][yr] || 0), 0);
+        });
+        const grandTotal = sortedBudgetCats.reduce((s, { total }) => s + total, 0);
+
+        const thS = 'padding:8px 12px;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap;border-bottom:2px solid var(--border)';
+        const headerCells = budgetYears.map(yr => `<th style="${thS};text-align:right">${yr}</th>`).join('');
+
+        const tableRows = sortedBudgetCats.map(({ cat, total }) => {
+          const color = catColor(cat);
+          const lim = budgetLimits[cat];
+          const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          const isSel = budgetBudgetCat === cat;
+          const avgMo = total / numBaseMonths;
+          const yearCells = budgetYears.map(yr => {
+            const amt = catYearData[cat][yr] || 0;
+            const annualLim = lim ? lim * 12 : null;
+            const over = annualLim && amt > annualLim;
+            return `<td style="text-align:right;padding:6px 12px;font-size:12px;color:${amt > 0 ? (over ? '#ef4444' : 'var(--text-primary)') : 'var(--text-muted)'};font-weight:${over ? '600' : '400'}">${amt > 0 ? fmtAUD(amt) : '—'}</td>`;
+          }).join('');
+          return `<tr onclick="selectBudgetCat('${esc}')" style="cursor:pointer;border-bottom:1px solid var(--border-light);transition:background .1s${isSel ? ';background:var(--bg-secondary)' : ''}" onmouseenter="if(!${isSel})this.style.background='var(--bg-secondary)'" onmouseleave="if(!${isSel})this.style.background=''">
+            <td style="padding:6px 12px;white-space:nowrap">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px"></span>
+              <span style="font-size:12px;color:var(--text-primary);font-weight:${isSel ? '600' : '400'}">${cat}</span>
+              ${lim ? `<span style="font-size:10px;color:var(--text-muted);margin-left:6px">/ ${fmtAUD(lim)}/mo</span>` : ''}
+            </td>
+            ${yearCells}
+            <td style="text-align:right;padding:6px 12px;font-size:12px;color:var(--text-muted)">${fmtAUD(avgMo)}</td>
+          </tr>`;
+        }).join('');
+
+        const footerCells = budgetYears.map(yr => `<td style="text-align:right;padding:8px 12px;font-size:12px;font-weight:700">${fmtAUD(yearTotalMap[yr])}</td>`).join('');
+
+        const budgetTable = `<div style="margin-bottom:20px">
+          <div class="budget-section-title" style="margin-bottom:10px">Annual spend by category</div>
+          <div class="budget-panel-box" style="overflow-x:auto;padding:0">
+            <table style="width:100%;border-collapse:collapse">
+              <thead><tr>
+                <th style="${thS};text-align:left">Category</th>
+                ${headerCells}
+                <th style="${thS};text-align:right">Avg/mo</th>
+              </tr></thead>
+              <tbody>${tableRows}</tbody>
+              <tfoot><tr style="border-top:2px solid var(--border)">
+                <td style="padding:8px 12px;font-size:12px;font-weight:700;color:var(--text-muted)">Total</td>
+                ${footerCells}
+                <td style="text-align:right;padding:8px 12px;font-size:12px;color:var(--text-muted)">${fmtAUD(grandTotal / numBaseMonths)}</td>
+              </tr></tfoot>
+            </table>
+          </div>
+        </div>`;
+
+        // Per-category drill: monthly trend + transactions
+        let budgetDrillHtml = '';
+        if (budgetBudgetCat && catYearData[budgetBudgetCat]) {
+          const cat = budgetBudgetCat;
+          const color = catColor(cat);
+          const lim = budgetLimits[cat];
+
+          // Monthly spend for this category across all time
+          const catMonthSpend = {};
+          bBase.forEach(t => {
+            if (t.debit <= 0 || effectiveCat(t) !== cat) return;
+            catMonthSpend[t.month] = (catMonthSpend[t.month] || 0) + t.debit;
+          });
+          const maxMoSpend = Math.max(...Object.values(catMonthSpend), 0.01);
+          const BAR_H = 80;
+
+          // Group by year for the trend, with year separators
+          let prevYr = null;
+          const catBars = allBaseMonths.map(m => {
+            const [yr, mo] = m.split('-');
+            const v = catMonthSpend[m] || 0;
+            const h = Math.round((v / maxMoSpend) * BAR_H);
+            const over = lim && v > lim;
+            const moLabel = new Date(+yr, +mo - 1, 1).toLocaleString('default', { month: 'short' });
+            const isSelMo = budgetSelectedMonth === m;
+            const yrSep = yr !== prevYr ? `<div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:${BAR_H + 20}px;margin-right:4px"><div style="flex:1;width:1px;background:var(--border)"></div><div style="font-size:9px;color:var(--text-muted);padding:2px 0">${yr}</div></div>` : '';
+            prevYr = yr;
+            return yrSep + `<div class="budget-trend-group${isSelMo ? ' selected' : ''}" onclick="selectMonth('${m}')" title="${fmtMonth(m)}: ${v > 0 ? fmtAUD(v) : '—'}">
+              <div class="budget-trend-bars">
+                <div class="budget-trend-bar" style="height:${Math.max(h, v > 0 ? 2 : 0)}px;background:${over ? '#ef4444' : color};opacity:0.85;width:14px"></div>
+              </div>
+              <div class="budget-trend-month">${moLabel}</div>
+            </div>`;
+          }).join('');
+
+          // Transactions filtered by selected period
+          let catTxs = bBase.filter(t => t.debit > 0 && effectiveCat(t) === cat);
+          if (budgetSelectedMonth) catTxs = catTxs.filter(t => t.month === budgetSelectedMonth);
+          else if (budgetSelectedYear) catTxs = catTxs.filter(t => t.month.startsWith(budgetSelectedYear));
+          catTxs.sort((a, b) => b.date - a.date);
+
+          const catAllTime = sortedBudgetCats.find(x => x.cat === cat)?.total || 0;
+          const periodLabel = budgetSelectedMonth ? fmtMonth(budgetSelectedMonth) : budgetSelectedYear ? budgetSelectedYear : 'all time';
+
+          budgetDrillHtml = `<div style="border-left:4px solid ${color};padding-left:14px">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+              <div class="budget-section-title" style="margin-bottom:0;color:${color}">${cat}</div>
+              <span style="font-size:12px;color:var(--text-muted)">${fmtAUD(catAllTime)} all time</span>
+              ${lim ? `<span style="font-size:12px;color:var(--text-muted)">· limit ${fmtAUD(lim)}/mo</span>` : ''}
+              <button onclick="selectBudgetCat(null)" style="font-size:11px;padding:2px 8px;cursor:pointer;background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;color:var(--text-muted)">✕</button>
+            </div>
+            <div class="budget-section-title" style="margin-bottom:8px">Monthly trend</div>
+            <div class="budget-panel-box" style="padding:12px 16px;margin-bottom:16px">
+              <div class="budget-trend-wrap"><div class="budget-trend" style="align-items:flex-end">${catBars}</div></div>
+            </div>
+            <div class="budget-section-title" style="margin-bottom:8px">Transactions — ${periodLabel} <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(${catTxs.length})</span></div>
+            <div class="budget-tx-list">${renderTxRows(catTxs.slice(0, 300))}</div>
+          </div>`;
+        }
+
+        tabContent = budgetTable + budgetDrillHtml;
       } else if (budgetSelectedTab === 'recurring') {
         tabContent = recurPanel;
       }
@@ -2104,6 +2243,7 @@
     }
 
     function selectTab(tab) { budgetSelectedTab = tab; window.scrollTo({top:0}); renderBudget(); }
+    function selectBudgetCat(cat) { budgetBudgetCat = budgetBudgetCat === cat ? null : (cat || null); renderBudget(); }
 
     function getCollapsed() {
       try { return new Set(JSON.parse(localStorage.getItem('budget_collapsed') || '[]')); } catch { return new Set(); }
@@ -2321,6 +2461,7 @@
 
     window.deleteTx = deleteTx;
     window.selectMonth = selectMonth;
+    window.selectBudgetCat = selectBudgetCat;
     window.selectYear = selectYear;
     window.selectCategory = selectCategory;
     window.selectDrillTab = selectDrillTab;
