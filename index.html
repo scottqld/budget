@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.29</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.30</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -429,6 +429,12 @@
       .map(([k, v]) => [k.toLowerCase(), v]);
 
     function autoCategory(narrative) {
+      if (_autoCatCache.has(narrative)) return _autoCatCache.get(narrative);
+      const r = _autoCat(narrative);
+      _autoCatCache.set(narrative, r);
+      return r;
+    }
+    function _autoCat(narrative) {
       const raw = narrative.toLowerCase();
       // Insert spaces at letter↔digit boundaries so patterns like \bkfc\b match "KFC1234"
       const norm = raw.replace(/([a-z])(\d)/g, '$1 $2').replace(/(\d)([a-z])/g, '$1 $2').replace(/\s+/g, ' ').trim();
@@ -565,11 +571,22 @@
       return null;
     }
 
+    let _manualCats = null;
+    let _merchantCats = null;
+    const _cleanCache = new Map();
+    const _autoCatCache = new Map();
+    const _effectiveCatCache = new Map();
+
     function getMerchantCatCache() {
-      try { return JSON.parse(localStorage.getItem('budget_merchant_cats') || '{}'); } catch { return {}; }
+      if (!_merchantCats) try { _merchantCats = JSON.parse(localStorage.getItem('budget_merchant_cats') || '{}'); } catch { _merchantCats = {}; }
+      return _merchantCats;
     }
     function getManualCats() {
-      try { return JSON.parse(localStorage.getItem('budget_manual_cats') || '{}'); } catch { return {}; }
+      if (!_manualCats) try { _manualCats = JSON.parse(localStorage.getItem('budget_manual_cats') || '{}'); } catch { _manualCats = {}; }
+      return _manualCats;
+    }
+    function invalidateCatCache() {
+      _manualCats = null; _merchantCats = null; _autoCatCache.clear(); _effectiveCatCache.clear();
     }
     function setCatOverride(narrative, cat) {
       const key = cleanMerchant(narrative) || narrative.trim().slice(0, 50);
@@ -577,6 +594,7 @@
       if (!cat || cat === 'Uncategorised') delete overrides[key];
       else overrides[key] = cat;
       localStorage.setItem('budget_manual_cats', JSON.stringify(overrides));
+      invalidateCatCache();
       if (cat && cat !== 'Uncategorised') {
         const count = budgetTransactions.filter(t =>
           (cleanMerchant(t.narrative) || t.narrative.trim().slice(0, 50)) === key
@@ -674,18 +692,26 @@
       }
 
       localStorage.setItem('budget_merchant_cats', JSON.stringify(cache));
+      invalidateCatCache();
       setClassifyStatus(`✓ Classified ${done} merchants`);
       renderBudget();
     }
 
     function effectiveCat(t) {
-      const merchantKey = cleanMerchant(t.narrative) || t.narrative.trim().slice(0, 50);
+      const key = t.narrative;
+      if (_effectiveCatCache.has(key)) return _effectiveCatCache.get(key);
+      const merchantKey = cleanMerchant(key) || key.trim().slice(0, 50);
       const manual = getManualCats();
-      if (manual[merchantKey]) return manual[merchantKey];
-      const auto = autoCategory(t.narrative);
-      if (auto) return auto;
-      if (t.category && t.category !== 'Uncategorised' && CAT_COLORS[t.category]) return t.category;
-      return 'Uncategorised';
+      let result;
+      if (manual[merchantKey]) result = manual[merchantKey];
+      else {
+        const auto = autoCategory(key);
+        if (auto) result = auto;
+        else if (t.category && t.category !== 'Uncategorised' && CAT_COLORS[t.category]) result = t.category;
+        else result = 'Uncategorised';
+      }
+      _effectiveCatCache.set(key, result);
+      return result;
     }
 
     const CAT_COLORS = {
@@ -1060,6 +1086,12 @@
     }
 
     function cleanMerchant(n) {
+      if (_cleanCache.has(n)) return _cleanCache.get(n);
+      const _r = _cleanMerchant(n);
+      _cleanCache.set(n, _r);
+      return _r;
+    }
+    function _cleanMerchant(n) {
       return n
         // card / payment method prefixes
         .replace(/^(visa\s+(purchase|debit\s+purchase|credit\s+purchase)|mc\s+purchase|mastercard\s+purchase)\s*/i, '')
@@ -1177,6 +1209,15 @@
         ${grid}${zeroLine}${lines}${xLabels}
         ${legend ? `<text x="${padL}" y="10" font-size="9" font-family="Inter,sans-serif">${legend}</text>` : ''}
       </svg>`;
+    }
+
+    let _recurringCache = null;
+    let _recurringTxLen = -1;
+    function getRecurring() {
+      if (_recurringCache !== null && _recurringTxLen === budgetTransactions.length) return _recurringCache;
+      _recurringCache = detectRecurring(budgetTransactions);
+      _recurringTxLen = budgetTransactions.length;
+      return _recurringCache;
     }
 
     function detectRecurring(allTxs) {
@@ -1643,7 +1684,7 @@
       }).join('');
       const balPanel = sec('bal', 'Running balance', balCharts || noData());
 
-      const recurring = detectRecurring(budgetTransactions);
+      const recurring = getRecurring();
       const recurHeader = `<div class="budget-bar-row" style="border-bottom:2px solid var(--border-light);padding-bottom:6px;margin-bottom:2px">
         <div style="flex:1;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Name</div>
         <div style="flex:0 0 75px;text-align:right;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Avg/Period</div>
@@ -1865,6 +1906,7 @@
       localStorage.removeItem('budget_api_key');
       localStorage.removeItem('budget_merchant_cats');
       document.getElementById('apiKeyInput').value = '';
+      invalidateCatCache();
       showStatus('API key and merchant cache cleared');
       renderBudget();
     }
