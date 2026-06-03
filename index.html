@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.13</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.14</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -700,6 +700,7 @@
     let budgetSelectedIncomeSource = null;
     let budgetSelectedAccount = null;
     let budgetSelectedTab = 'overview';
+    let budgetDrillTab = 'transactions';
 
     try { budgetLimits = JSON.parse(localStorage.getItem('budget_limits') || '{}'); } catch { budgetLimits = {}; }
 
@@ -1384,6 +1385,7 @@
 
       // Category drill-down: merchant breakdown for the selected category
       let catDetailPanel = '';
+      let catDrillPanel = '';
       if (budgetSelectedCategory) {
         const catTxs = txs.filter(t => effectiveCat(t) === budgetSelectedCategory);
         const catTotal = catTxs.reduce((s, t) => s + t.debit, 0);
@@ -1403,12 +1405,30 @@
           <div style="flex:0 0 50px;text-align:right;font-size:11px;color:var(--text-muted)">${Math.round(amt / catTotal * 100)}%</div>
         </div>`).join('');
         const selColor = catColor(budgetSelectedCategory);
+        const catTxsSorted = catTxs.slice().sort((a, b) => b.date - a.date);
+        const tabBtn = (id, label) => {
+          const active = budgetDrillTab === id;
+          return `<button onclick="selectDrillTab('${id}')" style="flex:1;padding:6px 10px;font-size:12px;font-weight:${active?'600':'400'};border:none;border-radius:6px;cursor:pointer;background:${active?'var(--bg-card)':'transparent'};color:${active?selColor:'var(--text-muted)'};box-shadow:${active?'0 1px 3px rgba(0,0,0,.1)':'none'};transition:all .15s">${label}</button>`;
+        };
+        const drillContent = budgetDrillTab === 'transactions'
+          ? `<div class="budget-tx-list">${renderTxRows(catTxsSorted)}</div>`
+          : `<div class="budget-panel-box">${catMerchRows || noData()}</div>`;
+        catDrillPanel = `<div style="margin-bottom:24px;border-left:4px solid ${selColor};padding-left:14px">
+          <div class="budget-section-title" style="margin-bottom:12px;color:${selColor}">${budgetSelectedCategory}
+            <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:8px">${fmtAUD(catTotal)} total · ${catTxs.length} transactions</span>
+            <button onclick="selectCategory(null)" style="font-size:11px;padding:2px 8px;margin-left:12px;cursor:pointer;background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;color:var(--text-muted)">✕ Clear</button>
+          </div>
+          <div style="display:flex;gap:4px;background:var(--bg-secondary);border-radius:8px;padding:3px;margin-bottom:14px">
+            ${tabBtn('transactions', `Transactions (${catTxs.length})`)}
+            ${tabBtn('merchants', 'Merchants')}
+          </div>
+          ${drillContent}
+        </div>`;
         catDetailPanel = `<div style="margin-bottom:24px;border-left:4px solid ${selColor};padding-left:14px">
           <div class="budget-section-title" style="margin-bottom:10px;color:${selColor}">${budgetSelectedCategory}
             <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:8px">${fmtAUD(catTotal)} total · ${catTxs.length} transactions</span>
             <button onclick="selectCategory(null)" style="font-size:11px;padding:2px 8px;margin-left:12px;cursor:pointer;background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;color:var(--text-muted)">✕ Clear</button>
           </div>
-          <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Merchant breakdown</div>
           <div class="budget-panel-box">${catMerchRows || noData()}</div>
         </div>`;
       }
@@ -1526,10 +1546,7 @@
 
       let catTabContent = catGrid;
       if (budgetSelectedCategory) {
-        const catTxsSorted = txs.filter(t => effectiveCat(t) === budgetSelectedCategory).slice().sort((a, b) => b.date - a.date);
-        catTabContent += `<div class="budget-section-title" style="margin-bottom:10px">${budgetSelectedCategory} transactions</div>
-          <div class="budget-tx-list">${renderTxRows(catTxsSorted)}</div>`;
-        catTabContent += catDetailPanel;
+        catTabContent += catDrillPanel;
       }
 
       const tabs = `<div class="budget-tabs">
@@ -1546,9 +1563,7 @@
       if (budgetSelectedTab === 'overview') {
         let overviewDrill = '';
         if (budgetSelectedCategory) {
-          const drillTxs = txs.filter(t => effectiveCat(t) === budgetSelectedCategory).sort((a, b) => b.date - a.date);
-          overviewDrill = `<div class="budget-section-title" style="margin-bottom:10px">${budgetSelectedCategory} transactions</div>
-            <div class="budget-tx-list" style="margin-bottom:24px">${renderTxRows(drillTxs)}</div>` + catDetailPanel;
+          overviewDrill = catDrillPanel;
         } else if (budgetSelectedIncomeSource) {
           overviewDrill = incDetailPanel;
         }
@@ -1658,6 +1673,7 @@
     function selectCategory(cat) {
       budgetSelectedCategory = cat;
       budgetSelectedIncomeSource = null;
+      budgetDrillTab = 'transactions';
       if (cat && budgetSelectedTab !== 'categories') budgetSelectedTab = 'categories';
       window.scrollTo({top: 0});
       renderBudget();
@@ -1665,7 +1681,12 @@
     function selectOverviewCategory(cat) {
       budgetSelectedCategory = budgetSelectedCategory === cat ? null : cat;
       budgetSelectedIncomeSource = null;
+      budgetDrillTab = 'transactions';
       window.scrollTo({top: 0});
+      renderBudget();
+    }
+    function selectDrillTab(tab) {
+      budgetDrillTab = tab;
       renderBudget();
     }
     function selectIncomeSource(src) {
@@ -1697,6 +1718,7 @@
     window.selectMonth = selectMonth;
     window.selectYear = selectYear;
     window.selectCategory = selectCategory;
+    window.selectDrillTab = selectDrillTab;
     window.setLimit = setLimit;
     window.filterTx = filterTx;
 
