@@ -188,7 +188,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.39</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.43</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -590,16 +590,14 @@
       _manualCats = null; _merchantCats = null; _catRenames = null; _autoCatCache.clear(); _effectiveCatCache.clear();
     }
     function setCatOverride(narrative, cat) {
-      const key = cleanMerchant(narrative) || narrative.trim().slice(0, 50);
+      const key = vendorName(narrative) || cleanMerchant(narrative) || narrative.trim().slice(0, 50);
       const overrides = getManualCats();
       if (!cat || cat === 'Uncategorised') delete overrides[key];
       else overrides[key] = cat;
       localStorage.setItem('budget_manual_cats', JSON.stringify(overrides));
       invalidateCatCache();
       if (cat && cat !== 'Uncategorised') {
-        const count = budgetTransactions.filter(t =>
-          (cleanMerchant(t.narrative) || t.narrative.trim().slice(0, 50)) === key
-        ).length;
+        const count = budgetTransactions.filter(t => (t.vendor || vendorName(t.narrative)) === key).length;
         if (count > 1) showStatus(`✓ "${cat}" applied to ${count} ${key} transactions`);
         else showStatus(`✓ Categorised as ${cat}`);
       }
@@ -702,10 +700,12 @@
       const key = t.narrative;
       if (_effectiveCatCache.has(key)) return _effectiveCatCache.get(key);
       const merchantKey = cleanMerchant(key) || key.trim().slice(0, 50);
+      const vKey = t.vendor || vendorName(key);
       const manual = getManualCats();
       const renames = getCatRenames();
       let result;
-      if (manual[merchantKey]) result = manual[merchantKey];
+      if (manual[vKey]) result = manual[vKey];
+      else if (vKey !== merchantKey && manual[merchantKey]) result = manual[merchantKey];
       else {
         const auto = autoCategory(key);
         if (auto) result = auto;
@@ -876,8 +876,12 @@
           const req = tx.objectStore('transactions').openCursor();
           req.onsuccess = e => {
             const cursor = e.target.result;
-            if (cursor) { items.push({ ...cursor.value, id: cursor.key }); cursor.continue(); }
-            else res(items);
+            if (cursor) {
+              const item = { ...cursor.value, id: cursor.key };
+              if (!item.vendor) item.vendor = vendorName(item.narrative);
+              items.push(item);
+              cursor.continue();
+            } else res(items);
           };
           req.onerror = e => rej(e.target.error);
         });
@@ -1050,10 +1054,12 @@
         if (!m) continue;
         const date = new Date(+m[3], +m[2] - 1, +m[1]);
         const month = `${m[3]}-${m[2].padStart(2, '0')}`;
+        const narrative = r['Narrative'] || '';
         out.push({
           account: r['Bank Account'] || '',
           dateStr, date, month,
-          narrative: r['Narrative'] || '',
+          narrative,
+          vendor: vendorName(narrative),
           debit, credit,
           balance: parseFloat(r['Balance']) || 0,
           category: (r['Categories'] || 'Uncategorised').trim() || 'Uncategorised',
@@ -1091,7 +1097,7 @@
 
     function catSpending(txs) {
       const m = {};
-      txs.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); m[c] = (m[c] || 0) + t.debit; } });
+      txs.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); if (c === 'Uncategorised') return; m[c] = (m[c] || 0) + t.debit; } });
       return Object.entries(m).sort((a, b) => b[1] - a[1]);
     }
 
@@ -1100,7 +1106,7 @@
       if (budgetSelectedAccount) base = base.filter(t => t.account === budgetSelectedAccount);
       const numMonths = new Set(base.map(t => t.month)).size || 1;
       const totals = {};
-      base.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); totals[c] = (totals[c] || 0) + t.debit; } });
+      base.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); if (c === 'Uncategorised') return; totals[c] = (totals[c] || 0) + t.debit; } });
       const avgs = {};
       for (const [cat, total] of Object.entries(totals)) avgs[cat] = total / numMonths;
       return avgs;
@@ -1112,6 +1118,86 @@
       _cleanCache.set(n, _r);
       return _r;
     }
+
+    // Brand normalization: map variants like "Coles Express Milton" → "Coles"
+    const BRAND_NORMS = [
+      [/^coles\b/i,                      'Coles'],
+      [/^woolworths\b/i,                  'Woolworths'],
+      [/^aldi\b/i,                        'Aldi'],
+      [/^iga\b/i,                         'IGA'],
+      [/^costco\b/i,                      'Costco'],
+      [/^harris\s*farm\b/i,               'Harris Farm'],
+      [/^spar\b/i,                        'Spar'],
+      [/^bunnings\b/i,                    'Bunnings'],
+      [/^mitre\s*10\b/i,                  'Mitre 10'],
+      [/^officeworks\b/i,                 'Officeworks'],
+      [/^jb\s*hi[- ]?fi\b/i,             'JB Hi-Fi'],
+      [/^target\b/i,                      'Target'],
+      [/^kmart\b/i,                       'Kmart'],
+      [/^big\s*w\b/i,                     'Big W'],
+      [/^harvey\s*norman\b/i,             'Harvey Norman'],
+      [/^myer\b/i,                        'Myer'],
+      [/^david\s*jones\b/i,               'David Jones'],
+      [/^rebel\b/i,                       'Rebel'],
+      [/^anaconda\b/i,                    'Anaconda'],
+      [/^chemist\s*warehouse\b/i,         'Chemist Warehouse'],
+      [/^priceline\b/i,                   'Priceline'],
+      [/^terry\s*white\b/i,               'Terry White'],
+      [/^mc\s*donalds?\b/i,               "McDonald's"],
+      [/^hungry\s*jacks?\b/i,             "Hungry Jack's"],
+      [/^kfc\b/i,                         'KFC'],
+      [/^subway\b/i,                      'Subway'],
+      [/^dominos?\b/i,                    "Domino's"],
+      [/^pizza\s*hut\b/i,                 'Pizza Hut'],
+      [/^red\s*rooster\b/i,               'Red Rooster'],
+      [/^nandos?\b/i,                     "Nando's"],
+      [/^guzman/i,                        'Guzman y Gomez'],
+      [/^grill'?d\b/i,                    "Grill'd"],
+      [/^boost\s*juice\b/i,               'Boost Juice'],
+      [/^zambrero\b/i,                    'Zambrero'],
+      [/^starbucks\b/i,                   'Starbucks'],
+      [/^gloria\s*jeans?\b/i,             "Gloria Jean's"],
+      [/^netflix\b/i,                     'Netflix'],
+      [/^spotify\b/i,                     'Spotify'],
+      [/^disney\b/i,                      'Disney+'],
+      [/^stan\b/i,                        'Stan'],
+      [/^amazon\b/i,                      'Amazon'],
+      [/^apple\b/i,                       'Apple'],
+      [/^google\b/i,                      'Google'],
+      [/^microsoft\b/i,                   'Microsoft'],
+      [/^uber\b/i,                        'Uber'],
+      [/^didi\b/i,                        'DiDi'],
+      [/^airbnb\b/i,                      'Airbnb'],
+      [/^qantas\b/i,                      'Qantas'],
+      [/^virgin\s*(?:australia|air)\b/i,  'Virgin Australia'],
+      [/^jetstar\b/i,                     'Jetstar'],
+      [/^bp\b/i,                          'BP'],
+      [/^shell\b/i,                       'Shell'],
+      [/^7[- ]?eleven\b/i,                '7-Eleven'],
+      [/^ampol\b/i,                       'Ampol'],
+      [/^caltex\b/i,                      'Caltex'],
+      [/^united\s*petroleum\b/i,          'United Petroleum'],
+      [/^anytime\s*fitness\b/i,           'Anytime Fitness'],
+      [/^snap\s*fitness\b/i,              'Snap Fitness'],
+      [/^fitness\s*first\b/i,             'Fitness First'],
+      [/^ikea\b/i,                        'IKEA'],
+      [/^spotlight\b/i,                   'Spotlight'],
+      [/^freedom\b/i,                     'Freedom Furniture'],
+      [/^nick\s*scali\b/i,                'Nick Scali'],
+    ];
+
+    const _vendorCache = new Map();
+    function vendorName(narrative) {
+      if (_vendorCache.has(narrative)) return _vendorCache.get(narrative);
+      const cleaned = cleanMerchant(narrative);
+      if (!cleaned) { _vendorCache.set(narrative, narrative.trim().slice(0, 40)); return _vendorCache.get(narrative); }
+      for (const [pat, name] of BRAND_NORMS) {
+        if (pat.test(cleaned)) { _vendorCache.set(narrative, name); return name; }
+      }
+      _vendorCache.set(narrative, cleaned);
+      return cleaned;
+    }
+
     function _cleanMerchant(n) {
       return n
         // card / payment method prefixes
@@ -1144,7 +1230,7 @@
       const SKIP = new Set(['Paypal', 'Sq', 'Square', 'Osko', 'Bpay']);
       txs.forEach(t => {
         if (t.debit > 0) {
-          const key = cleanMerchant(t.narrative);
+          const key = t.vendor || vendorName(t.narrative);
           if (key && !SKIP.has(key)) {
             if (!m[key]) m[key] = { amt: 0, narrative: t.narrative };
             m[key].amt += t.debit;
@@ -1160,7 +1246,8 @@
     function monthlyTotals() {
       const m = {};
       budgetTransactions.forEach(t => {
-        if (NON_EXPENSE_CATS.has(effectiveCat(t))) return;
+        const _c = effectiveCat(t);
+        if (NON_EXPENSE_CATS.has(_c) || _c === 'Uncategorised') return;
         if (!m[t.month]) m[t.month] = { inc: 0, exp: 0 };
         m[t.month].inc += t.credit;
         m[t.month].exp += t.debit;
@@ -1171,7 +1258,8 @@
     function annualTotals() {
       const m = {};
       budgetTransactions.forEach(t => {
-        if (NON_EXPENSE_CATS.has(effectiveCat(t))) return;
+        const _c = effectiveCat(t);
+        if (NON_EXPENSE_CATS.has(_c) || _c === 'Uncategorised') return;
         const year = t.month.split('-')[0];
         if (!m[year]) m[year] = { inc: 0, exp: 0 };
         m[year].inc += t.credit;
@@ -1335,8 +1423,8 @@
       const txs = filtered();
       const months = allMonths();
       const years = allYears();
-      const totalInc = txs.reduce((s, t) => s + t.credit, 0);
-      const totalExp = txs.reduce((s, t) => s + t.debit, 0);
+      const totalInc = txs.reduce((s, t) => effectiveCat(t) !== 'Uncategorised' ? s + t.credit : s, 0);
+      const totalExp = txs.reduce((s, t) => effectiveCat(t) !== 'Uncategorised' ? s + t.debit : s, 0);
       const net = totalInc - totalExp;
 
       const allAccounts = [...new Set(budgetTransactions.map(t => t.account))].filter(Boolean).sort();
@@ -1369,6 +1457,7 @@
         const monthlyData = allMonths().filter(m => m.startsWith(budgetSelectedYear)).reverse().map(m => {
           let mTxs = budgetTransactions.filter(t => t.month === m);
           if (budgetSelectedAccount) mTxs = mTxs.filter(t => t.account === budgetSelectedAccount);
+          mTxs = mTxs.filter(t => effectiveCat(t) !== 'Uncategorised');
           const inc = mTxs.reduce((s, t) => s + t.credit, 0);
           const exp = mTxs.reduce((s, t) => s + t.debit, 0);
           return { m, inc, exp, net: inc - exp };
@@ -1404,6 +1493,7 @@
         const mdata = allMonths().filter(m => m.startsWith(budgetSelectedYear)).map(m => {
           let mTxs = budgetTransactions.filter(t => t.month === m);
           if (budgetSelectedAccount) mTxs = mTxs.filter(t => t.account === budgetSelectedAccount);
+          mTxs = mTxs.filter(t => effectiveCat(t) !== 'Uncategorised');
           const inc = mTxs.reduce((s, t) => s + t.credit, 0);
           const exp = mTxs.reduce((s, t) => s + t.debit, 0);
           return { m, inc, exp, net: inc - exp };
@@ -1478,7 +1568,7 @@
       // Income sources breakdown for overview comparison
       const incSrc = {};
       txs.filter(t => t.credit > 0).forEach(t => {
-        const key = cleanMerchant(t.narrative) || t.narrative.trim().slice(0, 35);
+        const key = t.vendor || t.narrative.trim().slice(0, 35);
         if (key) incSrc[key] = (incSrc[key] || 0) + t.credit;
       });
       const incSrcList = Object.entries(incSrc).sort((a, b) => b[1] - a[1]).slice(0, 20);
@@ -1599,7 +1689,7 @@
         const catMerch = {};
         catTxs.forEach(t => {
           if (t.debit > 0) {
-            const key = cleanMerchant(t.narrative);
+            const key = t.vendor || vendorName(t.narrative);
             if (key) catMerch[key] = (catMerch[key] || 0) + t.debit;
           }
         });
@@ -1646,7 +1736,7 @@
         const srcName = budgetSelectedIncomeSource;
         const srcTxs = txs.filter(t => {
           if (t.credit <= 0) return false;
-          const key = cleanMerchant(t.narrative) || t.narrative.trim().slice(0, 35);
+          const key = t.vendor || t.narrative.trim().slice(0, 35);
           return key === srcName;
         }).sort((a, b) => b.date - a.date);
         const srcTotal = srcTxs.reduce((s, t) => s + t.credit, 0);
@@ -1854,7 +1944,7 @@
           if (budgetSelectedAccount && t.account !== budgetSelectedAccount) return;
           const vCat = effectiveCat(t);
           if (NON_EXPENSE_CATS.has(vCat) || vCat === 'Uncategorised') return;
-          const vendor = cleanMerchant(t.narrative);
+          const vendor = t.vendor || vendorName(t.narrative);
           if (!vendor) return;
           vendorWcData[vendor] = (vendorWcData[vendor] || 0) + t.debit;
           if (!vendorCatMap[vendor]) vendorCatMap[vendor] = {};
@@ -1938,7 +2028,7 @@
       }
 
       return txs.map(t => {
-        const merchant = cleanMerchant(t.narrative) || t.narrative;
+        const merchant = t.vendor || t.narrative;
         const cat = effectiveCat(t);
         const color = catColor(cat);
         const bal = t.balance ? `<div class="budget-tx-balance">${fmtAUD(t.balance)}</div>` : '';
@@ -1977,7 +2067,7 @@
       const results = allTxs.filter(t =>
         t.narrative.toLowerCase().includes(ql) ||
         effectiveCat(t).toLowerCase().includes(ql) ||
-        (cleanMerchant(t.narrative) || '').toLowerCase().includes(ql)
+        (t.vendor || '').toLowerCase().includes(ql)
       ).sort((a, b) => b.date - a.date);
       if (countEl) countEl.textContent = results.length === 0 ? 'No results' : `${results.length} result${results.length !== 1 ? 's' : ''} across all time`;
       document.getElementById('txList').innerHTML = renderTxRows(results.slice(0, 300));
@@ -1985,9 +2075,9 @@
 
     function exportCSV() {
       const txs = filtered().slice().sort((a, b) => b.date - a.date);
-      const rows = [['Date', 'Narrative', 'Category', 'Debit', 'Credit', 'Balance', 'Account']];
+      const rows = [['Date', 'Narrative', 'Vendor', 'Category', 'Debit', 'Credit', 'Balance', 'Account']];
       txs.forEach(t => {
-        rows.push([t.dateStr, '"' + t.narrative.replace(/"/g, '""') + '"', effectiveCat(t), t.debit || '', t.credit || '', t.balance || '', acctName(t.account)]);
+        rows.push([t.dateStr, '"' + t.narrative.replace(/"/g, '""') + '"', '"' + (t.vendor || '').replace(/"/g, '""') + '"', effectiveCat(t), t.debit || '', t.credit || '', t.balance || '', acctName(t.account)]);
       });
       const csv = rows.map(r => r.join(',')).join('\n');
       const blob = new Blob([csv], { type: 'text/csv' });
