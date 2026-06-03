@@ -188,7 +188,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.52</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.53</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -2200,7 +2200,7 @@
       function fmtDateInline(dateStr) {
         const [d, m, y] = dateStr.split('/');
         const dt = new Date(+y, +m - 1, +d);
-        return dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+        return dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
       }
 
       return txs.map(t => {
