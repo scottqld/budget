@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.24</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.25</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1286,9 +1286,55 @@
       const cards = `<div class="budget-summary-cards">
         <div class="budget-card"><div class="budget-card-label">Income</div><div class="budget-card-value income">${fmtAUD(totalInc)}</div></div>
         <div class="budget-card"><div class="budget-card-label">Expenses</div><div class="budget-card-value expense">${fmtAUD(totalExp)}</div></div>
-        <div class="budget-card"><div class="budget-card-label">Net</div><div class="budget-card-value ${net >= 0 ? 'income' : 'expense'}">${net >= 0 ? '+' : '−'}${fmtAUD(net)}</div></div>
-        <div class="budget-card"><div class="budget-card-label">Transactions</div><div class="budget-card-value">${txs.length}</div></div>
+        <div class="budget-card"><div class="budget-card-label">Net savings</div><div class="budget-card-value ${net >= 0 ? 'income' : 'expense'}">${net >= 0 ? '+' : '−'}${fmtAUD(Math.abs(net))}</div></div>
+        <div class="budget-card"><div class="budget-card-label">Savings rate</div><div class="budget-card-value ${net >= 0 ? 'income' : 'expense'}">${totalInc > 0 ? Math.round(net / totalInc * 100) + '%' : '—'}</div></div>
       </div>`;
+
+      // Monthly savings chart (shown when a year is selected but no specific month)
+      let savingsPanel = '';
+      if (budgetSelectedYear && !budgetSelectedMonth) {
+        const monthlyData = allMonths().filter(m => m.startsWith(budgetSelectedYear)).reverse().map(m => {
+          let mTxs = budgetTransactions.filter(t => t.month === m);
+          if (budgetSelectedAccount) mTxs = mTxs.filter(t => t.account === budgetSelectedAccount);
+          const inc = mTxs.reduce((s, t) => s + t.credit, 0);
+          const exp = mTxs.reduce((s, t) => s + t.debit, 0);
+          return { m, inc, exp, net: inc - exp };
+        });
+        const maxAbs = Math.max(...monthlyData.map(d => Math.max(d.inc, d.exp)), 1);
+        const rows = monthlyData.map(({ m, inc, exp, net }) => {
+          const isCurrentMonth = m === budgetSelectedMonth;
+          const savings = net >= 0;
+          return `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;cursor:pointer" onclick="selectMonth('${m}')">
+            <div style="flex:0 0 44px;font-size:11px;color:var(--text-muted);text-align:right">${fmtMonth(m).replace(' ' + budgetSelectedYear, '')}</div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:3px">
+              <div style="display:flex;align-items:center;gap:4px">
+                <div style="height:6px;border-radius:3px;background:#16a34a;width:${(inc / maxAbs) * 100}%;min-width:${inc > 0 ? 2 : 0}px"></div>
+                <span style="font-size:10px;color:#16a34a">+${fmtAUD(inc)}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px">
+                <div style="height:6px;border-radius:3px;background:var(--accent);width:${(exp / maxAbs) * 100}%;min-width:${exp > 0 ? 2 : 0}px"></div>
+                <span style="font-size:10px;color:var(--accent)">−${fmtAUD(exp)}</span>
+              </div>
+            </div>
+            <div style="flex:0 0 70px;text-align:right;font-size:11px;font-weight:600;color:${savings ? '#16a34a' : '#ef4444'}">${savings ? '+' : '−'}${fmtAUD(Math.abs(net))}</div>
+          </div>`;
+        }).join('');
+        savingsPanel = `<div style="margin-bottom:16px">
+          <div class="budget-section-title" style="margin-bottom:10px">Monthly savings — ${budgetSelectedYear}</div>
+          <div class="budget-panel-box" style="padding:8px 16px">${rows}</div>
+        </div>`;
+      }
+
+      // Previous month category totals for month-over-month deltas
+      let prevMonthCats = null;
+      if (budgetSelectedMonth) {
+        const [y, mo] = budgetSelectedMonth.split('-').map(Number);
+        const pd = new Date(y, mo - 2, 1);
+        const prevMonth = `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, '0')}`;
+        let prevTxs = budgetTransactions.filter(t => t.month === prevMonth);
+        if (budgetSelectedAccount) prevTxs = prevTxs.filter(t => t.account === budgetSelectedAccount);
+        prevMonthCats = Object.fromEntries(catSpending(prevTxs));
+      }
 
       const cats = catSpending(txs);
       const maxCat = cats[0]?.[1] || 1;
@@ -1338,16 +1384,24 @@
         </div>`;
       }).join('');
 
-      // Simple outgoings rows (no limit buttons, just name/bar/amount)
+      // Simple outgoings rows with month-over-month delta when a specific month is selected
       const outRows = cats.map(([cat, amt]) => {
         const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const color = catColor(cat);
         const isSel = budgetSelectedCategory === cat;
+        const prev = prevMonthCats?.[cat];
+        const delta = prev != null ? amt - prev : null;
+        const deltaHtml = delta != null
+          ? `<span style="font-size:10px;font-weight:600;color:${delta > 50 ? '#ef4444' : delta < -50 ? '#22c55e' : 'var(--text-muted)'}">
+              ${delta > 0 ? '↑' : delta < 0 ? '↓' : '≈'}${fmtAUD(Math.abs(delta))}
+            </span>`
+          : '';
         return `<div class="budget-bar-row" onclick="selectOverviewCategory('${esc}')" style="cursor:pointer${isSel ? `;background:var(--bg-secondary);margin:0 -16px;padding:4px 16px;border-radius:4px;border-left:3px solid ${color}` : ''}">
           <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div>
           <div class="budget-bar-label" title="${cat}" style="font-weight:${isSel ? '600' : '400'}">${cat}</div>
           <div class="budget-bar-wrap"><div class="budget-bar" style="width:${(amt/maxCat)*100}%;background:${color}"></div></div>
           <div class="budget-bar-amount">${fmtAUD(amt)}</div>
+          ${deltaHtml}
         </div>`;
       }).join('');
 
@@ -1611,7 +1665,7 @@
         } else if (budgetSelectedIncomeSource) {
           overviewDrill = incDetailPanel;
         }
-        tabContent = cards + comparePanel + overviewDrill;
+        tabContent = cards + savingsPanel + comparePanel + overviewDrill;
       } else if (budgetSelectedTab === 'categories') {
         tabContent = catTabContent;
       } else if (budgetSelectedTab === 'transactions') {
