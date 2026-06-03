@@ -188,7 +188,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.49</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.50</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -249,16 +249,14 @@
     };
     function acctName(id) { return ACCOUNT_NAMES[id] || id; }
     const EXCLUDED_ACCOUNTS = new Set(['9962', '033040289567']); // Platinum Mastercard, Westpac eSaver
-    const _DEFAULT_EXCLUDED = ['Bank Transfers', 'Salary/Wages'];
     let NON_EXPENSE_CATS;
     try {
-      let _excArr = JSON.parse(localStorage.getItem('budget_excluded_cats') || JSON.stringify(_DEFAULT_EXCLUDED));
-      // Migrate: ensure built-in income categories are always present
-      let _changed = false;
-      _DEFAULT_EXCLUDED.forEach(c => { if (!_excArr.includes(c)) { _excArr.push(c); _changed = true; } });
-      if (_changed) localStorage.setItem('budget_excluded_cats', JSON.stringify(_excArr));
+      let _excArr = JSON.parse(localStorage.getItem('budget_excluded_cats') || '["Bank Transfers"]');
+      // Revert: Salary/Wages is income, not unaccounted — remove from excluded if present
+      _excArr = _excArr.filter(c => c !== 'Salary/Wages');
+      localStorage.setItem('budget_excluded_cats', JSON.stringify(_excArr));
       NON_EXPENSE_CATS = new Set(_excArr);
-    } catch { NON_EXPENSE_CATS = new Set(_DEFAULT_EXCLUDED); }
+    } catch { NON_EXPENSE_CATS = new Set(['Bank Transfers']); }
     const _acctPalette = ['#D97757', '#3b82f6', '#16a34a', '#f59e0b', '#8b5cf6', '#ec4899'];
     function acctColor(id) {
       const all = [...new Set(budgetTransactions.map(t => t.account))].filter(Boolean).sort();
@@ -1977,16 +1975,24 @@
 
         // Per-category per-year spend totals
         const catYearData = {};
+        const catTotalCredits = {};
         let bBase = budgetTransactions;
         if (budgetSelectedAccount) bBase = bBase.filter(t => t.account === budgetSelectedAccount);
         bBase.forEach(t => {
-          if (t.debit <= 0) return;
           const cat = effectiveCat(t);
           if (NON_EXPENSE_CATS.has(cat) || cat === 'Uncategorised') return;
-          const yr = t.month.split('-')[0];
-          if (!catYearData[cat]) catYearData[cat] = {};
-          catYearData[cat][yr] = (catYearData[cat][yr] || 0) + t.debit;
+          if (t.debit > 0) {
+            const yr = t.month.split('-')[0];
+            if (!catYearData[cat]) catYearData[cat] = {};
+            catYearData[cat][yr] = (catYearData[cat][yr] || 0) + t.debit;
+          }
+          if (t.credit > 0) catTotalCredits[cat] = (catTotalCredits[cat] || 0) + t.credit;
         });
+        // Exclude income-dominant categories (total credits > total debits)
+        for (const cat of Object.keys(catYearData)) {
+          const totalDebit = Object.values(catYearData[cat]).reduce((s, v) => s + v, 0);
+          if ((catTotalCredits[cat] || 0) > totalDebit) delete catYearData[cat];
+        }
 
         const allBaseMonths = [...new Set(bBase.map(t => t.month))].sort();
         const numBaseMonths = allBaseMonths.length || 1;
