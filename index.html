@@ -195,7 +195,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.14</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.15</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -558,6 +558,13 @@
       if (!cat || cat === 'Uncategorised') delete overrides[key];
       else overrides[key] = cat;
       localStorage.setItem('budget_manual_cats', JSON.stringify(overrides));
+      if (cat && cat !== 'Uncategorised') {
+        const count = budgetTransactions.filter(t =>
+          (cleanMerchant(t.narrative) || t.narrative.trim().slice(0, 50)) === key
+        ).length;
+        if (count > 1) showStatus(`✓ "${cat}" applied to ${count} ${key} transactions`);
+        else showStatus(`✓ Categorised as ${cat}`);
+      }
       renderBudget();
     }
     function openCatDropdown(el) {
