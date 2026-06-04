@@ -188,7 +188,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.55</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.56</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1791,7 +1791,7 @@
 
       const _balAccounts = budgetSelectedAccount
         ? [budgetSelectedAccount]
-        : [...new Set(budgetTransactions.map(t => t.account))].filter(Boolean).sort();
+        : [...new Set(budgetTransactions.map(t => t.account))].filter(a => a && a !== '3238').sort();
       const balCharts = _balAccounts.map(acc => {
         const accTxs = txs.filter(t => t.account === acc);
         if (accTxs.length < 2) return '';
