@@ -188,7 +188,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.56</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.57</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1824,10 +1824,12 @@
 
       // Categories tab: full grid of ALL defined categories, then drill-down
       const catSpendMap = Object.fromEntries(catSpending(txs));
+      const catAvgMap = avgMonthlyCatSpending(true);
       const allDefinedCats = Object.keys(CAT_COLORS).filter(c => c !== 'Uncategorised' && c !== 'Other').sort((a, b) => a.localeCompare(b));
       const uncatAmt = catSpendMap['Uncategorised'] || 0;
       const catCards = allDefinedCats.map(cat => {
         const amt = catSpendMap[cat] || 0;
+        const avg = catAvgMap[cat] || 0;
         const color = catColor(cat);
         const isSelected = budgetSelectedCategory === cat;
         const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -1841,6 +1843,7 @@
             <button onclick="event.stopPropagation();toggleExcludedCat('${esc}')" style="background:none;border:none;padding:0;cursor:pointer;font-size:13px;color:${excluded ? '#ef4444' : 'var(--text-muted)'};line-height:1" title="${excluded ? 'Marked as unaccounted — click to include' : 'Mark as unaccounted'}">⊘</button>
           </div>
           <div style="font-size:18px;font-weight:700;color:${amt > 0 ? color : 'var(--text-muted)'}">${amt > 0 ? fmtAUD(amt) : '—'}</div>
+          ${avg > 0 ? `<div style="font-size:11px;color:var(--text-muted)">avg ${fmtAUD(avg)}/mo</div>` : ''}
           <div style="font-size:11px;color:${excluded ? '#ef4444' : 'var(--text-muted)'}">${excluded ? 'unaccounted (hidden from Overview)' : txCount > 0 ? txCount + ' transaction' + (txCount > 1 ? 's' : '') : 'no transactions'}</div>
         </div>`;
       }).join('');
