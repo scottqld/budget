@@ -194,7 +194,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.64</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.65</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -2041,7 +2041,47 @@
         const catHeatPanel    = sec('catheat',  'Category heatmap', `<div class="budget-panel-box" style="padding:12px 16px">${buildHeatmap(catHeatRows, heatMonths)}</div>`);
         const vendorHeatPanel = sec('vendheat', 'Vendor heatmap',   `<div class="budget-panel-box" style="padding:12px 16px">${buildHeatmap(vendorHeatRows, heatMonths)}</div>`);
 
-        tabContent = catHeatPanel + vendorHeatPanel + cards + balPanel + annualPanel + trendPanel;
+        // Category line chart — top 6 categories, monthly spend over time
+        const _clMonths = heatMonths; // chronological
+        const _clTopCats = Object.entries(catHeatData)
+          .map(([cat, data]) => [cat, Object.values(data).reduce((s, v) => s + v, 0)])
+          .sort((a, b) => b[1] - a[1]).slice(0, 6).map(([cat]) => cat);
+        let catLinePanel = '';
+        if (_clTopCats.length && _clMonths.length >= 2) {
+          const W = 800, H = 200, padL = 66, padR = 16, padT = 14, padB = 24;
+          const cW = W - padL - padR, cH = H - padT - padB;
+          const n = _clMonths.length;
+          const maxVal = Math.max(..._clTopCats.flatMap(cat => _clMonths.map(m => catHeatData[cat]?.[m] || 0)), 1);
+          const tx = i => padL + (n > 1 ? (i / (n - 1)) * cW : cW / 2);
+          const ty = v => padT + cH - (v / maxVal) * cH;
+          let grid = '';
+          for (let i = 0; i <= 4; i++) {
+            const v = maxVal * i / 4;
+            const y = ty(v);
+            grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="var(--border-light)" stroke-width="1"/>`;
+            grid += `<text x="${padL - 5}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="9" fill="#8c8c8a">${fmtAUD(v)}</text>`;
+          }
+          const xStep = Math.max(1, Math.floor(n / 10));
+          let xLabels = '';
+          _clMonths.forEach((m, i) => {
+            if (i % xStep !== 0 && i !== n - 1) return;
+            const [yr, mo] = m.split('-');
+            const lbl = new Date(+yr, +mo - 1).toLocaleDateString('en-AU', { month: 'short', year: '2-digit' });
+            xLabels += `<text x="${tx(i).toFixed(1)}" y="${H - 4}" text-anchor="middle" font-size="9" fill="#8c8c8a">${lbl}</text>`;
+          });
+          const lines = _clTopCats.map(cat => {
+            const pts = _clMonths.map((m, i) => `${tx(i).toFixed(1)},${ty(catHeatData[cat]?.[m] || 0).toFixed(1)}`).join(' ');
+            return `<polyline points="${pts}" fill="none" stroke="${catColor(cat)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" opacity="0.9"/>`;
+          }).join('');
+          const chartSvg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${grid}${lines}${xLabels}</svg>`;
+          const legendHtml = `<div style="display:flex;flex-wrap:wrap;gap:10px 20px;margin-top:10px">${_clTopCats.map(cat =>
+            `<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-muted)">
+              <span style="display:inline-block;width:20px;height:3px;border-radius:2px;background:${catColor(cat)}"></span>${cat}
+            </span>`).join('')}</div>`;
+          catLinePanel = sec('catline', 'Category trends', `<div class="budget-panel-box" style="padding:12px 16px">${chartSvg}${legendHtml}</div>`);
+        }
+
+        tabContent = catLinePanel + catHeatPanel + vendorHeatPanel + cards + balPanel + annualPanel + trendPanel;
       } else if (budgetSelectedTab === 'budget') {
         const budgetYears = [...new Set(budgetTransactions.map(t => t.month.split('-')[0]))].sort();
 
