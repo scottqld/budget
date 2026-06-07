@@ -4,7 +4,7 @@
 $NAS_IP   = "192.168.4.215"
 $NAS_PORT = "9222"
 $NAS_USER = "sclarke"
-$REMOTE   = "/data/budget/index.html"
+$REMOTE   = "/Volume2/appdata/budget/index.html"
 $LOCAL    = "$PSScriptRoot\index.html"
 
 if (-not (Test-Path $LOCAL)) {
@@ -18,7 +18,7 @@ Write-Host "Deploying budget $version -> ${NAS_USER}@${NAS_IP}:${REMOTE}"
 scp -P $NAS_PORT $LOCAL "${NAS_USER}@${NAS_IP}:${REMOTE}"
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "Done - https://${NAS_IP}:8444"
+    Write-Host "Done - http://${NAS_IP}:8080"
 } else {
     Write-Error "Deploy failed"
 }
