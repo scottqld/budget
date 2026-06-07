@@ -4,7 +4,8 @@
 set -e
 
 NAS_IP="192.168.4.215"
-NAS_USER="${1:-admin}"
+NAS_PORT="9222"
+NAS_USER="${1:-sclarke}"
 REMOTE_PATH="/data/budget/index.html"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOCAL_FILE="$SCRIPT_DIR/index.html"
@@ -17,6 +18,6 @@ fi
 VERSION=$(grep -oP 'v\d+\.\d+' "$LOCAL_FILE" | head -1)
 echo "Deploying budget $VERSION → ${NAS_USER}@${NAS_IP}:${REMOTE_PATH}"
 
-scp "$LOCAL_FILE" "${NAS_USER}@${NAS_IP}:${REMOTE_PATH}"
+scp -P "$NAS_PORT" "$LOCAL_FILE" "${NAS_USER}@${NAS_IP}:${REMOTE_PATH}"
 
 echo "✓ Done — https://${NAS_IP}:8444"
