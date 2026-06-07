@@ -196,7 +196,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.70</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.71</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -2370,7 +2370,8 @@
     }
 
     const BACKUP_LS_KEYS = [
-      'budget_cats', 'budget_limits', 'budget_excluded_cats', 'budget_excluded_accounts',
+      'budget_custom_cats', 'budget_cat_renames', 'budget_manual_cats',
+      'budget_limits', 'budget_excluded_cats', 'budget_excluded_accounts',
       'budget_merchant_cats', 'budget_vendor_descs', 'budget_collapsed',
       'budget_overview_order', 'budget_brand_norms'
     ];
@@ -2437,7 +2438,7 @@
         await new Promise((res, rej) => {
           const tx = db.transaction('imported_files', 'readwrite');
           const store = tx.objectStore('imported_files');
-          backup.importedFiles.forEach(f => store.add(f));
+          backup.importedFiles.forEach(f => store.put(f, f.filename));
           tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
         });
       }
