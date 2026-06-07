@@ -182,7 +182,9 @@
     }
     .budget-tx-row:last-child { border-bottom: none; }
     .budget-tx-date { flex: 0 0 60px; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
-    .budget-tx-merchant { flex: 1; color: var(--text-primary); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .budget-tx-merchant { flex: 1; color: var(--text-primary); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+    .budget-tx-merchant .vendor-edit { opacity: 0; font-size: 11px; color: var(--text-muted); margin-left: 4px; transition: opacity .12s; }
+    .budget-tx-merchant:hover .vendor-edit { opacity: 1; }
     .budget-tx-cat-badge { flex: 0 0 auto; font-size: 10px; padding: 2px 8px; border-radius: 10px; background: var(--bg-secondary); color: var(--text-muted); white-space: nowrap; border: 1px solid var(--border-light); }
     .budget-tx-amount { flex: 0 0 85px; text-align: right; font-weight: 500; }
     .budget-tx-amount.income { color: #16a34a; }
@@ -194,7 +196,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.65</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.67</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -2314,7 +2316,9 @@
       }
 
       return txs.map(t => {
-        const merchant = t.vendor || t.narrative;
+        const vendorKey = t.vendor || vendorName(t.narrative);
+        const merchant = displayVendor(vendorKey);
+        const escVKey = vendorKey.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const cat = effectiveCat(t);
         const color = catColor(cat);
         const bal = t.balance ? `<div class="budget-tx-balance">${fmtAUD(t.balance)}</div>` : '';
@@ -2328,7 +2332,7 @@
         const delBtn = t.id != null ? `<button class="tx-del-btn" onclick="event.stopPropagation();deleteTx(${t.id})" style="flex:0 0 auto;background:none;border:none;padding:2px 5px;border-radius:4px;cursor:pointer;font-size:15px;color:#9ca3af;line-height:1" onmouseenter="this.style.color='#ef4444'" onmouseleave="this.style.color='#9ca3af'" title="Delete transaction">×</button>` : '';
         return `<div class="budget-tx-row" style="border-left:3px solid ${color}">
           <div class="budget-tx-date">${fmtDateInline(t.dateStr)}</div>
-          <div class="budget-tx-merchant" title="${t.narrative}">${merchant}</div>
+          <div class="budget-tx-merchant" title="${t.narrative}" onclick="showVendorDescModal('${escVKey}')">${merchant}<span class="vendor-edit">✏</span></div>
           ${catBadge}
           <div class="budget-tx-amount ${t.debit > 0 ? 'expense' : 'income'}">${t.debit > 0 ? '−' + fmtAUD(t.debit) : '+' + fmtAUD(t.credit)}</div>
           ${bal}
@@ -2557,6 +2561,57 @@
     }
 
     let _renamingCat = null;
+    let _vendorDescs = null;
+    function getVendorDescs() {
+      if (!_vendorDescs) try { _vendorDescs = JSON.parse(localStorage.getItem('budget_vendor_descs') || '{}'); } catch { _vendorDescs = {}; }
+      return _vendorDescs;
+    }
+    function setVendorDesc(key, desc) {
+      const d = getVendorDescs();
+      if (desc) d[key] = desc; else delete d[key];
+      localStorage.setItem('budget_vendor_descs', JSON.stringify(d));
+    }
+    function displayVendor(vendorKey) {
+      return getVendorDescs()[vendorKey] || vendorKey;
+    }
+
+    let _editingVendorKey = null;
+    function showVendorDescModal(vendorKey) {
+      document.querySelectorAll('.vendor-desc-modal').forEach(d => d.remove());
+      _editingVendorKey = vendorKey;
+      const current = getVendorDescs()[vendorKey] || '';
+      const overlay = document.createElement('div');
+      overlay.className = 'vendor-desc-modal';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center';
+      overlay.innerHTML = `<div style="background:var(--bg-card);border-radius:12px;padding:24px;width:360px;box-shadow:0 8px 40px rgba(0,0,0,.3);font-family:inherit">
+        <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:16px">Label vendor</div>
+        <div style="margin-bottom:16px">
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:6px">🔒 Original name (read-only)</label>
+          <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;color:var(--text-muted);user-select:all">${vendorKey.replace(/</g,'&lt;')}</div>
+        </div>
+        <div style="margin-bottom:20px">
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:6px">Display label <span style="font-weight:400">(leave blank to reset)</span></label>
+          <input id="vendorDescInput" type="text" value="${current.replace(/"/g,'&quot;')}" placeholder="${vendorKey.replace(/"/g,'&quot;')}"
+            style="width:100%;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;color:var(--text-primary);font-family:inherit;outline:none;box-sizing:border-box">
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button onclick="this.closest('.vendor-desc-modal').remove()" style="font-size:13px;padding:7px 16px">Cancel</button>
+          <button onclick="saveVendorDesc()" class="primary" style="font-size:13px;padding:7px 16px">Save</button>
+        </div>
+      </div>`;
+      overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+      document.body.appendChild(overlay);
+      const input = document.getElementById('vendorDescInput');
+      input.focus(); input.select();
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') saveVendorDesc(); if (e.key === 'Escape') overlay.remove(); });
+    }
+    function saveVendorDesc() {
+      const desc = (document.getElementById('vendorDescInput')?.value || '').trim();
+      setVendorDesc(_editingVendorKey, desc);
+      document.querySelectorAll('.vendor-desc-modal').forEach(d => d.remove());
+      renderBudget();
+    }
+
     function showRenameCategoryModal(cat) {
       document.querySelectorAll('.rename-cat-modal').forEach(d => d.remove());
       _renamingCat = cat;
@@ -2674,6 +2729,8 @@
     window.saveNewCategory = saveNewCategory;
     window.showRenameCategoryModal = showRenameCategoryModal;
     window.saveRenameCategory = saveRenameCategory;
+    window.showVendorDescModal = showVendorDescModal;
+    window.saveVendorDesc = saveVendorDesc;
 
     document.addEventListener('click', function(e) {
       const badge = e.target.closest('.budget-tx-cat-badge');
