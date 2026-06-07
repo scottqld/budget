@@ -188,7 +188,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.59</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.61</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1611,35 +1611,48 @@
       }).join('');
 
       // Spending breakdown donut chart
-      const donutCats = cats.filter(([, a]) => a > 0).slice(0, 8);
-      const donutTotal = donutCats.reduce((s, [, a]) => s + a, 0);
+      const _allDonutCats = cats.filter(([, a]) => a > 0);
+      const donutCats = _allDonutCats.slice(0, 8);
+      const otherAmt = _allDonutCats.slice(8).reduce((s, [, a]) => s + a, 0);
+      const donutTotal = totalExp; // always matches the expenses figure at top
       let spendingBreakdownPanel = '';
       if (donutCats.length) {
         const r = 54, cx = 74, cy = 74, sw = 26;
         const C = 2 * Math.PI * r;
         let cum = 0;
-        const slices = donutCats.map(([cat, amt]) => {
+        const allSliceCats = [...donutCats, ...(otherAmt > 0 ? [['Other', otherAmt]] : [])];
+        const slices = allSliceCats.map(([cat, amt]) => {
+          const color = cat === 'Other' ? '#9ca3af' : catColor(cat);
           const dash = (amt / donutTotal) * C;
           const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-          const s = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${catColor(cat)}" stroke-width="${sw}"
+          const clickable = cat !== 'Other';
+          const s = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="${sw}"
             stroke-dasharray="${dash.toFixed(2)} ${(C - dash).toFixed(2)}"
             stroke-dashoffset="${(C / 4 - cum).toFixed(2)}"
-            style="cursor:pointer" onclick="selectOverviewCategory('${esc}')"><title>${cat}: ${fmtAUD(amt)} (${Math.round((amt/donutTotal)*100)}%)</title></circle>`;
+            ${clickable ? `style="cursor:pointer" onclick="selectOverviewCategory('${esc}')"` : ''}><title>${cat}: ${fmtAUD(amt)} (${Math.round((amt/donutTotal)*100)}%)</title></circle>`;
           cum += dash;
           return s;
         }).join('');
-        const legendRows = donutCats.map(([cat, amt]) => {
-          const pct = Math.round((amt / donutTotal) * 100);
-          const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-          return `<div onclick="selectOverviewCategory('${esc}')" style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer">
-            <span style="width:10px;height:10px;border-radius:2px;background:${catColor(cat)};flex-shrink:0"></span>
-            <span style="font-size:12px;color:var(--text-primary);flex:1">${cat}</span>
-            <span style="font-size:11px;color:var(--text-muted);min-width:28px;text-align:right">${pct}%</span>
-            <span style="font-size:12px;font-weight:600;color:var(--text-primary);min-width:68px;text-align:right">${fmtAUD(amt)}</span>
-          </div>`;
-        }).join('');
+        const legendRows = [
+          ...donutCats.map(([cat, amt]) => {
+            const pct = Math.round((amt / donutTotal) * 100);
+            const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            return `<div onclick="selectOverviewCategory('${esc}')" style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer">
+              <span style="width:10px;height:10px;border-radius:2px;background:${catColor(cat)};flex-shrink:0"></span>
+              <span style="font-size:12px;color:var(--text-primary);flex:1">${cat}</span>
+              <span style="font-size:11px;color:var(--text-muted);min-width:28px;text-align:right">${pct}%</span>
+              <span style="font-size:12px;font-weight:600;color:var(--text-primary);min-width:68px;text-align:right">${fmtAUD(amt)}</span>
+            </div>`;
+          }),
+          otherAmt > 0 ? `<div style="display:flex;align-items:center;gap:6px;padding:3px 0">
+            <span style="width:10px;height:10px;border-radius:2px;background:#9ca3af;flex-shrink:0"></span>
+            <span style="font-size:12px;color:var(--text-muted);flex:1">Other</span>
+            <span style="font-size:11px;color:var(--text-muted);min-width:28px;text-align:right">${Math.round((otherAmt/donutTotal)*100)}%</span>
+            <span style="font-size:12px;color:var(--text-muted);min-width:68px;text-align:right">${fmtAUD(otherAmt)}</span>
+          </div>` : ''
+        ].join('');
         spendingBreakdownPanel = `<div style="margin-bottom:16px">
-          <div class="budget-section-title" style="margin-bottom:10px">Spending breakdown</div>
+          <div class="budget-section-title" style="margin-bottom:10px">Spending breakdown <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${budgetSelectedMonth ? fmtMonth(budgetSelectedMonth) : budgetSelectedYear ? budgetSelectedYear : 'all time'}</span></div>
           <div class="budget-panel-box" style="padding:16px">
             <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
               <svg width="${cx*2}" height="${cy*2}" style="flex-shrink:0;overflow:visible">
