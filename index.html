@@ -188,7 +188,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.57</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.59</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1610,6 +1610,49 @@
         </div>`;
       }).join('');
 
+      // Spending breakdown donut chart
+      const donutCats = cats.filter(([, a]) => a > 0).slice(0, 8);
+      const donutTotal = donutCats.reduce((s, [, a]) => s + a, 0);
+      let spendingBreakdownPanel = '';
+      if (donutCats.length) {
+        const r = 54, cx = 74, cy = 74, sw = 26;
+        const C = 2 * Math.PI * r;
+        let cum = 0;
+        const slices = donutCats.map(([cat, amt]) => {
+          const dash = (amt / donutTotal) * C;
+          const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          const s = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${catColor(cat)}" stroke-width="${sw}"
+            stroke-dasharray="${dash.toFixed(2)} ${(C - dash).toFixed(2)}"
+            stroke-dashoffset="${(C / 4 - cum).toFixed(2)}"
+            style="cursor:pointer" onclick="selectOverviewCategory('${esc}')"><title>${cat}: ${fmtAUD(amt)} (${Math.round((amt/donutTotal)*100)}%)</title></circle>`;
+          cum += dash;
+          return s;
+        }).join('');
+        const legendRows = donutCats.map(([cat, amt]) => {
+          const pct = Math.round((amt / donutTotal) * 100);
+          const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          return `<div onclick="selectOverviewCategory('${esc}')" style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer">
+            <span style="width:10px;height:10px;border-radius:2px;background:${catColor(cat)};flex-shrink:0"></span>
+            <span style="font-size:12px;color:var(--text-primary);flex:1">${cat}</span>
+            <span style="font-size:11px;color:var(--text-muted);min-width:28px;text-align:right">${pct}%</span>
+            <span style="font-size:12px;font-weight:600;color:var(--text-primary);min-width:68px;text-align:right">${fmtAUD(amt)}</span>
+          </div>`;
+        }).join('');
+        spendingBreakdownPanel = `<div style="margin-bottom:16px">
+          <div class="budget-section-title" style="margin-bottom:10px">Spending breakdown</div>
+          <div class="budget-panel-box" style="padding:16px">
+            <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
+              <svg width="${cx*2}" height="${cy*2}" style="flex-shrink:0;overflow:visible">
+                ${slices}
+                <text x="${cx}" y="${cy-7}" text-anchor="middle" style="font-size:10px;fill:var(--text-muted)">Total</text>
+                <text x="${cx}" y="${cy+10}" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--text-primary)">${fmtAUD(donutTotal)}</text>
+              </svg>
+              <div style="flex:1;min-width:180px">${legendRows}</div>
+            </div>
+          </div>
+        </div>`;
+      }
+
       const comparePanel = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
         <div>
           <div class="budget-section-title" style="margin-bottom:10px;color:#16a34a">Incomings <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${fmtAUD(totalInc)}</span></div>
@@ -1823,7 +1866,7 @@
         `<span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:8px">detected from all-time data</span>`);
 
       // Categories tab: full grid of ALL defined categories, then drill-down
-      const catSpendMap = Object.fromEntries(catSpending(txs));
+      const catSpendMap = Object.fromEntries(catSpending(txs, true));
       const catAvgMap = avgMonthlyCatSpending(true);
       const allDefinedCats = Object.keys(CAT_COLORS).filter(c => c !== 'Uncategorised' && c !== 'Other').sort((a, b) => a.localeCompare(b));
       const uncatAmt = catSpendMap['Uncategorised'] || 0;
@@ -1928,7 +1971,7 @@
         } else if (budgetSelectedIncomeSource) {
           overviewDrill = incDetailPanel;
         }
-        tabContent = spendingAlerts + cards + savingsPanel + annualSummaryPanel + comparePanel + overviewDrill;
+        tabContent = spendingAlerts + cards + savingsPanel + annualSummaryPanel + spendingBreakdownPanel + comparePanel + overviewDrill;
       } else if (budgetSelectedTab === 'categories') {
         tabContent = catTabContent;
       } else if (budgetSelectedTab === 'transactions') {
