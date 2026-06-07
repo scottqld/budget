@@ -196,7 +196,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.68</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.69</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1893,7 +1893,11 @@
       // Categories tab: full grid of ALL defined categories, then drill-down
       const catSpendMap = Object.fromEntries(catSpending(txs, true));
       const catAvgMap = avgMonthlyCatSpending(true);
-      const allDefinedCats = Object.keys(CAT_COLORS).filter(c => c !== 'Uncategorised' && c !== 'Other').sort((a, b) => a.localeCompare(b));
+      const allDefinedCats = Object.keys(CAT_COLORS).filter(c => c !== 'Uncategorised' && c !== 'Other').sort((a, b) => {
+        const aEx = EXCLUDED_CATS.has(a), bEx = EXCLUDED_CATS.has(b);
+        if (aEx !== bEx) return aEx ? 1 : -1;
+        return a.localeCompare(b);
+      });
       const uncatAmt = catSpendMap['Uncategorised'] || 0;
       const catCards = allDefinedCats.map(cat => {
         const amt = catSpendMap[cat] || 0;
