@@ -188,7 +188,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.61</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.63</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1709,15 +1709,19 @@
       const monthly = monthlyTotals();
       const maxM = Math.max(...monthly.map(([, d]) => Math.max(d.inc, d.exp)), 1);
       const H = 80;
-      const trendBars = monthly.map(([m, d]) => {
+      const trendBars = monthly.map(([m, d], i) => {
         const iH = Math.round((d.inc / maxM) * H);
         const eH = Math.round((d.exp / maxM) * H);
+        const yr = m.split('-')[0];
+        const prevYr = i > 0 ? monthly[i - 1][0].split('-')[0] : null;
+        const showYear = i === 0 || yr !== prevYr;
         return `<div class="budget-trend-group${m === budgetSelectedMonth ? ' selected' : ''}" onclick="selectMonth('${m}')">
           <div class="budget-trend-bars">
             <div class="budget-trend-bar income" style="height:${iH}px" title="Income ${fmtAUD(d.inc)}"></div>
             <div class="budget-trend-bar expense" style="height:${eH}px" title="Expenses ${fmtAUD(d.exp)}"></div>
           </div>
           <div class="budget-trend-month">${fmtMonth(m).split(' ')[0]}</div>
+          ${showYear ? `<div style="font-size:9px;color:var(--text-muted);text-align:center;margin-top:1px;opacity:.7">${yr}</div>` : '<div style="font-size:9px;margin-top:1px">&nbsp;</div>'}
         </div>`;
       }).join('');
       const legend = `<span style="margin-left:12px;font-size:11px;font-weight:400;color:var(--text-muted)">
@@ -1847,7 +1851,7 @@
 
       const _balAccounts = budgetSelectedAccount
         ? [budgetSelectedAccount]
-        : [...new Set(budgetTransactions.map(t => t.account))].filter(a => a && a !== '3238').sort();
+        : [...new Set(budgetTransactions.map(t => t.account))].filter(a => a && a !== '3238' && a !== '037184352797').sort();
       const balCharts = _balAccounts.map(acc => {
         const accTxs = txs.filter(t => t.account === acc);
         if (accTxs.length < 2) return '';
