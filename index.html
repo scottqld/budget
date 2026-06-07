@@ -107,6 +107,12 @@
     .budget-summary-cards {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px;
     }
+    .budget-drag-panel { position: relative; }
+    .budget-drag-panel.ov-dragging { opacity: 0.35; }
+    .budget-drag-panel.ov-drag-over { outline: 2px dashed var(--accent); border-radius: 10px; }
+    .budget-drag-handle { position: absolute; top: 6px; right: 6px; cursor: grab; color: var(--text-muted); font-size: 16px; opacity: 0; transition: opacity .15s; user-select: none; z-index: 10; line-height: 1; padding: 4px; }
+    .budget-drag-panel:hover .budget-drag-handle { opacity: 0.5; }
+    .budget-drag-handle:hover { opacity: 1 !important; }
     .budget-card {
       background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 16px;
     }
@@ -188,7 +194,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.63</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.64</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1988,7 +1994,11 @@
         } else if (budgetSelectedIncomeSource) {
           overviewDrill = incDetailPanel;
         }
-        tabContent = spendingAlerts + cards + savingsPanel + annualSummaryPanel + spendingBreakdownPanel + comparePanel + overviewDrill;
+        const _ovPanels = { cards, savings: savingsPanel, annual: annualSummaryPanel, breakdown: spendingBreakdownPanel, compare: comparePanel };
+        const _ovOrder = getOverviewOrder();
+        const _ovFull = [..._ovOrder.filter(id => id in _ovPanels), ...OV_DEFAULT_ORDER.filter(id => !_ovOrder.includes(id) && id in _ovPanels)];
+        const _ovHtml = _ovFull.map(id => _ovPanels[id] ? ovDraggable(id, _ovPanels[id]) : '').join('');
+        tabContent = spendingAlerts + `<div id="overview-panels">${_ovHtml}</div>` + overviewDrill;
       } else if (budgetSelectedTab === 'categories') {
         tabContent = catTabContent;
       } else if (budgetSelectedTab === 'transactions') {
@@ -2363,6 +2373,44 @@
       if (content) content.style.display = s.has(id) ? 'none' : '';
       if (btn) btn.textContent = s.has(id) ? '›' : '⌄';
     }
+    const OV_DEFAULT_ORDER = ['cards', 'savings', 'annual', 'breakdown', 'compare'];
+    function getOverviewOrder() {
+      try {
+        const o = JSON.parse(localStorage.getItem('budget_overview_order') || '[]');
+        if (Array.isArray(o) && o.length) return o;
+      } catch {}
+      return [...OV_DEFAULT_ORDER];
+    }
+    let _ovDragSrc = null;
+    function ovDragStart(e) {
+      _ovDragSrc = e.currentTarget;
+      setTimeout(() => _ovDragSrc && _ovDragSrc.classList.add('ov-dragging'), 0);
+      e.dataTransfer.effectAllowed = 'move';
+    }
+    function ovDragOver(e) {
+      e.preventDefault();
+      const target = e.currentTarget;
+      if (!_ovDragSrc || target === _ovDragSrc) return;
+      target.classList.add('ov-drag-over');
+      const rect = target.getBoundingClientRect();
+      target.parentNode.insertBefore(_ovDragSrc, e.clientY < rect.top + rect.height / 2 ? target : target.nextSibling);
+    }
+    function ovDragLeave(e) { e.currentTarget.classList.remove('ov-drag-over'); }
+    function ovDragEnd(e) {
+      if (_ovDragSrc) _ovDragSrc.classList.remove('ov-dragging');
+      document.querySelectorAll('.budget-drag-panel').forEach(p => p.classList.remove('ov-drag-over'));
+      const order = [...document.querySelectorAll('#overview-panels > .budget-drag-panel')].map(p => p.dataset.panel);
+      localStorage.setItem('budget_overview_order', JSON.stringify(order));
+      _ovDragSrc = null;
+    }
+    function ovDraggable(id, content) {
+      return `<div class="budget-drag-panel" draggable="true" data-panel="${id}"
+        ondragstart="ovDragStart(event)" ondragover="ovDragOver(event)" ondragleave="ovDragLeave(event)" ondragend="ovDragEnd(event)">
+        <div class="budget-drag-handle" title="Drag to reorder">⠿</div>
+        ${content}
+      </div>`;
+    }
+
     function sec(id, title, content, extraTitleHtml = '') {
       const collapsed = getCollapsed().has(id);
       return `<div style="margin-bottom:24px">
