@@ -196,7 +196,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.71</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.72</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -2407,46 +2407,57 @@
       if (!file) return;
       input.value = '';
       let backup;
-      try { backup = JSON.parse(await file.text()); } catch { showStatus('Invalid backup file'); return; }
-      if (!backup.transactions || !backup.localStorage) { showStatus('Invalid backup file'); return; }
-      if (!confirm(`Restore backup from ${backup.exportedAt?.slice(0,10) || 'unknown date'}? This will replace ALL current data.`)) return;
+      try { backup = JSON.parse(await file.text()); } catch(e) { showStatus('Could not read backup file: ' + e.message); return; }
+      if (!Array.isArray(backup.transactions) || !backup.localStorage) { showStatus('Invalid backup file format'); return; }
+      if (!confirm(`Restore ${backup.transactions.length} transactions from ${backup.exportedAt?.slice(0,10) || 'unknown date'}? This will replace ALL current data.`)) return;
 
-      // Restore localStorage
-      Object.entries(backup.localStorage).forEach(([k, v]) => localStorage.setItem(k, v));
+      try {
+        // Fix dates — JSON serialises Date as string, IDB needs Date objects
+        const txsToRestore = backup.transactions.map(t => ({
+          ...t,
+          date: t.date ? new Date(t.date) : undefined,
+        }));
+        // Remove the id property — it was the external IDB key, not stored in the value
+        txsToRestore.forEach(t => delete t.id);
 
-      // Restore IndexedDB transactions
-      const db = await openDB();
-      await new Promise((res, rej) => {
-        const tx = db.transaction('transactions', 'readwrite');
-        tx.objectStore('transactions').clear();
-        tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
-      });
-      await new Promise((res, rej) => {
-        const tx = db.transaction('transactions', 'readwrite');
-        const store = tx.objectStore('transactions');
-        backup.transactions.forEach(t => store.add(t));
-        tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
-      });
+        const db = await openDB();
 
-      // Restore imported_files
-      if (backup.importedFiles?.length) {
+        // Restore transactions atomically (clear + add in one transaction)
         await new Promise((res, rej) => {
-          const tx = db.transaction('imported_files', 'readwrite');
-          tx.objectStore('imported_files').clear();
-          tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+          const tx = db.transaction('transactions', 'readwrite');
+          tx.onerror = e => rej(e.target.error);
+          tx.onabort = e => rej(e.target.error);
+          tx.oncomplete = res;
+          const store = tx.objectStore('transactions');
+          store.clear();
+          txsToRestore.forEach(t => store.add(t));
         });
+
+        // Restore imported_files atomically
         await new Promise((res, rej) => {
           const tx = db.transaction('imported_files', 'readwrite');
+          tx.onerror = e => rej(e.target.error);
+          tx.onabort = e => rej(e.target.error);
+          tx.oncomplete = res;
           const store = tx.objectStore('imported_files');
-          backup.importedFiles.forEach(f => store.put(f, f.filename));
-          tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+          store.clear();
+          (backup.importedFiles || []).forEach(f => store.put(
+            { ...f, importedAt: f.importedAt ? new Date(f.importedAt) : new Date() },
+            f.filename
+          ));
         });
-      }
 
-      _merchantCats = null;
-      _vendorDescs = null;
-      showStatus('Backup restored — reloading…');
-      setTimeout(() => location.reload(), 800);
+        // Restore localStorage only after IDB succeeds
+        Object.entries(backup.localStorage).forEach(([k, v]) => localStorage.setItem(k, v));
+
+        _merchantCats = null;
+        _vendorDescs = null;
+        showStatus('Backup restored — reloading…');
+        setTimeout(() => location.reload(), 800);
+      } catch(e) {
+        showStatus('Restore failed: ' + e.message + ' — your original data is intact');
+        console.error('Restore error:', e);
+      }
     }
 
     function exportCSV() {
