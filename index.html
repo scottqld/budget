@@ -196,7 +196,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.67</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.68</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1628,7 +1628,7 @@
         const r = 54, cx = 74, cy = 74, sw = 26;
         const C = 2 * Math.PI * r;
         let cum = 0;
-        const allSliceCats = [...donutCats, ...(otherAmt > 0 ? [['Other', otherAmt]] : [])];
+        const allSliceCats = [...donutCats, ...(otherAmt > 0 ? [['Other', otherAmt]] : [])].sort((a, b) => b[1] - a[1]);
         const slices = allSliceCats.map(([cat, amt]) => {
           const color = cat === 'Other' ? '#9ca3af' : catColor(cat);
           const dash = (amt / donutTotal) * C;
@@ -1641,24 +1641,24 @@
           cum += dash;
           return s;
         }).join('');
-        const legendRows = [
-          ...donutCats.map(([cat, amt]) => {
-            const pct = Math.round((amt / donutTotal) * 100);
-            const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            return `<div onclick="selectOverviewCategory('${esc}')" style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer">
-              <span style="width:10px;height:10px;border-radius:2px;background:${catColor(cat)};flex-shrink:0"></span>
-              <span style="font-size:12px;color:var(--text-primary);flex:1">${cat}</span>
+        const legendRows = allSliceCats.map(([cat, amt]) => {
+          const pct = Math.round((amt / donutTotal) * 100);
+          if (cat === 'Other') {
+            return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0">
+              <span style="width:10px;height:10px;border-radius:2px;background:#9ca3af;flex-shrink:0"></span>
+              <span style="font-size:12px;color:var(--text-muted);flex:1">Other</span>
               <span style="font-size:11px;color:var(--text-muted);min-width:28px;text-align:right">${pct}%</span>
-              <span style="font-size:12px;font-weight:600;color:var(--text-primary);min-width:68px;text-align:right">${fmtAUD(amt)}</span>
+              <span style="font-size:12px;color:var(--text-muted);min-width:68px;text-align:right">${fmtAUD(amt)}</span>
             </div>`;
-          }),
-          otherAmt > 0 ? `<div style="display:flex;align-items:center;gap:6px;padding:3px 0">
-            <span style="width:10px;height:10px;border-radius:2px;background:#9ca3af;flex-shrink:0"></span>
-            <span style="font-size:12px;color:var(--text-muted);flex:1">Other</span>
-            <span style="font-size:11px;color:var(--text-muted);min-width:28px;text-align:right">${Math.round((otherAmt/donutTotal)*100)}%</span>
-            <span style="font-size:12px;color:var(--text-muted);min-width:68px;text-align:right">${fmtAUD(otherAmt)}</span>
-          </div>` : ''
-        ].join('');
+          }
+          const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          return `<div onclick="selectOverviewCategory('${esc}')" style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer">
+            <span style="width:10px;height:10px;border-radius:2px;background:${catColor(cat)};flex-shrink:0"></span>
+            <span style="font-size:12px;color:var(--text-primary);flex:1">${cat}</span>
+            <span style="font-size:11px;color:var(--text-muted);min-width:28px;text-align:right">${pct}%</span>
+            <span style="font-size:12px;font-weight:600;color:var(--text-primary);min-width:68px;text-align:right">${fmtAUD(amt)}</span>
+          </div>`;
+        }).join('');
         spendingBreakdownPanel = `<div style="margin-bottom:16px">
           <div class="budget-section-title" style="margin-bottom:10px">Spending breakdown <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${budgetSelectedMonth ? fmtMonth(budgetSelectedMonth) : budgetSelectedYear ? budgetSelectedYear : 'all time'}</span></div>
           <div class="budget-panel-box" style="padding:16px">
