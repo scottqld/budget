@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.6</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.7</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -860,7 +860,7 @@
         btn.style.color = isFixed ? '#fff' : 'var(--text-muted)';
         btn.style.borderColor = isFixed ? 'var(--accent)' : 'var(--border)';
         slider.disabled = isFixed;
-        if (isFixed) slider.value = 0;
+        if (isFixed) slider.value = parseFloat(row.dataset.avg); // fixed = no cut, target = full avg
       });
       autoDistributeCutbacks();
     }
@@ -874,6 +874,7 @@
       const flexTotal = flexRows.reduce((s, r) => s + parseFloat(r.dataset.avg), 0);
       const requiredFlex = Math.max(goal - fixedTotal, 0);
       const scale = flexTotal > 0 ? requiredFlex / flexTotal : 1;
+      rows.filter(r => _cutbackFixed.has(r.dataset.cat)).forEach(r => { r.querySelector('.cb-slider').value = parseFloat(r.dataset.avg); });
       flexRows.forEach(r => { r.querySelector('.cb-slider').value = Math.round(parseFloat(r.dataset.avg) * scale); });
       updateCutbackPlan();
     }
@@ -895,8 +896,8 @@
       const remaining = gap - totalSavings;
       const summaryEl = document.getElementById('cb-summary');
       if (summaryEl) summaryEl.innerHTML = remaining <= 0
-        ? `<span style="color:#16a34a;font-weight:600">✓ Goal reached!</span> <span style="font-size:11px;color:var(--text-muted)">Buffer: +${fmtAUD(Math.abs(remaining))}/mo</span>`
-        : `<span style="color:#ef4444;font-weight:600">${fmtAUD(remaining)}/mo still to cut</span>`;
+        ? `<span style="color:#16a34a;font-weight:600">✓ Goal reached</span> <span style="font-size:11px;color:var(--text-muted)">Planned cuts: ${fmtAUD(totalSavings)}/mo · buffer: +${fmtAUD(Math.abs(remaining))}/mo</span>`
+        : `<span style="color:#ef4444;font-weight:600">${fmtAUD(remaining)}/mo still to cut</span> <span style="font-size:11px;color:var(--text-muted)">(${fmtAUD(totalSavings)}/mo planned)</span>`;
       const bar = document.getElementById('cb-progress-bar');
       if (bar) { bar.style.width = Math.min(totalSavings / Math.max(gap, 1) * 100, 100) + '%'; bar.style.background = remaining <= 0 ? '#16a34a' : '#f59e0b'; }
     }
@@ -2482,14 +2483,10 @@
         const _cbGap = _cbTotalAvg - _cbGoal;
         let cutbackPanel = '';
         if (_cbAvgs.length > 0 && _cbGap > 0) {
-          const _cbFixedTotal = _cbAvgs.filter(([cat]) => _cutbackFixed.has(cat)).reduce((s, [, a]) => s + a, 0);
-          const _cbFlexTotal = _cbAvgs.filter(([cat]) => !_cutbackFixed.has(cat)).reduce((s, [, a]) => s + a, 0);
-          const _cbReqFlex = Math.max(_cbGoal - _cbFixedTotal, 0);
-          const _cbAutoScale = _cbFlexTotal > 0 ? _cbReqFlex / _cbFlexTotal : 1;
           const cbRows = _cbAvgs.map(([cat, avg]) => {
             const isFixed = _cutbackFixed.has(cat);
-            const target = isFixed ? avg : Math.round(avg * _cbAutoScale);
-            const savings = Math.max(avg - target, 0);
+            const target = avg; // start at current spend — user drags or uses Auto-distribute
+            const savings = 0;
             const color = catColor(cat);
             return `<div class="cb-row" data-cat="${cat.replace(/"/g, '&quot;')}" data-avg="${avg.toFixed(2)}" style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-light)">
               <div style="flex:1;display:flex;align-items:center;gap:6px;min-width:0">
