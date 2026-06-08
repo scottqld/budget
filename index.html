@@ -196,7 +196,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.75</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.76</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1670,15 +1670,18 @@
       }).join('');
 
       // Spending breakdown donut chart — tabbed (independent of period filter)
-      const _bdTab = localStorage.getItem('budget_breakdown_tab') || 'yearly';
       const _bdNow = new Date();
       const _bdCurYear = String(_bdNow.getFullYear());
-      const _bdCurMonthKey = `${_bdNow.getFullYear()}-${String(_bdNow.getMonth()+1).padStart(2,'0')}`;
-      const _bdLastDate = new Date(_bdNow.getFullYear(), _bdNow.getMonth() - 1, 1);
-      const _bdLastMonthKey = `${_bdLastDate.getFullYear()}-${String(_bdLastDate.getMonth()+1).padStart(2,'0')}`;
       const _bdBase = budgetSelectedAccount
         ? budgetTransactions.filter(t => t.account === budgetSelectedAccount)
         : budgetTransactions;
+      const _bdAllMonths = [...new Set(_bdBase.map(t => t.month))].filter(Boolean).sort();
+      const _bdMonths = _bdAllMonths.slice(-4); // last 4 months in chronological order
+      const _bdTabDefault = _bdMonths.length ? 'm:' + _bdMonths[_bdMonths.length - 1] : 'yearly';
+      const _bdSaved = localStorage.getItem('budget_breakdown_tab') || _bdTabDefault;
+      // Reset stale tab values (old lastmonth/curmonth IDs, or a month that scrolled out of the 4)
+      const _bdTab = (_bdSaved === 'yearly' || _bdSaved === 'avgmo' || _bdMonths.some(m => 'm:' + m === _bdSaved))
+        ? _bdSaved : _bdTabDefault;
       const _bdCatSpend = txList => {
         const m = {};
         txList.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); if (c === 'Uncategorised' || EXCLUDED_CATS.has(c)) return; m[c] = (m[c] || 0) + t.debit; } });
@@ -1686,15 +1689,10 @@
       };
       let _bdEntries;
       if (_bdTab === 'avgmo') {
-        const _allMs = new Set(_bdBase.map(t => t.month));
-        const _n = _allMs.size || 1;
+        const _n = _bdAllMonths.length || 1;
         _bdEntries = _bdCatSpend(_bdBase).map(([cat, total]) => [cat, total / _n]);
-      } else if (_bdTab === 'lastmonth') {
-        _bdEntries = _bdCatSpend(_bdBase.filter(t => t.month === _bdLastMonthKey));
-      } else if (_bdTab === 'curmonth') {
-        const _sortedMs = [...new Set(_bdBase.map(t => t.month))].sort();
-        const _effM = _sortedMs.includes(_bdCurMonthKey) ? _bdCurMonthKey : (_sortedMs[_sortedMs.length - 1] || _bdCurMonthKey);
-        _bdEntries = _bdCatSpend(_bdBase.filter(t => t.month === _effM));
+      } else if (_bdTab.startsWith('m:')) {
+        _bdEntries = _bdCatSpend(_bdBase.filter(t => t.month === _bdTab.slice(2)));
       } else {
         _bdEntries = _bdCatSpend(_bdBase.filter(t => t.month && t.month.startsWith(_bdCurYear)));
       }
@@ -1705,18 +1703,17 @@
         return `<button onclick="selectBreakdownTab('${id}')" style="font-size:11px;padding:4px 10px;border-radius:4px;border:1px solid ${active ? 'var(--accent)' : 'var(--border-light)'};background:${active ? 'var(--accent)' : 'transparent'};color:${active ? '#fff' : 'var(--text-muted)'};cursor:pointer">${label}</button>`;
       };
       let spendingBreakdownPanel = '';
-      if (_bdEntries.length) {
+      if (_bdAllMonths.length) {
         spendingBreakdownPanel = `<div style="margin-bottom:16px">
           <div class="budget-section-title" style="margin-bottom:10px">Spending breakdown</div>
           <div class="budget-panel-box" style="padding:16px">
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
               ${_bdTabBtn('yearly', _bdCurYear)}
               ${_bdTabBtn('avgmo', 'Avg / mo')}
-              ${_bdTabBtn('lastmonth', fmtMonth(_bdLastMonthKey))}
-              ${_bdTabBtn('curmonth', 'This month')}
+              ${_bdMonths.map(m => _bdTabBtn('m:' + m, fmtMonth(m))).join('')}
             </div>
             <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
-              ${_bdDonut.svg}
+              ${_bdDonut.svg || '<div style="padding:24px;color:var(--text-muted);font-size:13px">No data</div>'}
               <div style="flex:1;min-width:180px">${_bdDonut.legend}</div>
             </div>
           </div>
