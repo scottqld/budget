@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.81</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.82</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -798,6 +798,7 @@
     let budgetSelectedTab = 'overview';
     let budgetDrillTab = 'transactions';
     let budgetBudgetCat = null;
+    let _bdSelectedCat = null;
     let _txSelIds = new Set();
     let _txVisibleIds = [];
 
@@ -1520,7 +1521,7 @@
         const s = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="${sw}"
           stroke-dasharray="${dash.toFixed(2)} ${(C - dash).toFixed(2)}"
           stroke-dashoffset="${(C / 4 - cum).toFixed(2)}"
-          ${clickable ? `style="cursor:pointer" onclick="selectOverviewCategory('${esc}')"` : ''}><title>${cat}: ${fmtAUD(amt)} (${Math.round((amt/total)*100)}%)</title></circle>`;
+          ${clickable ? `style="cursor:pointer" onclick="selectDonutCat('${esc}')"` : ''}><title>${cat}: ${fmtAUD(amt)} (${Math.round((amt/total)*100)}%)</title></circle>`;
         cum += dash;
         return s;
       }).join('');
@@ -1529,7 +1530,7 @@
         const color = cat === 'Other' ? '#9ca3af' : catColor(cat);
         const muted = cat === 'Other';
         const esc = muted ? '' : cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        const rowAttrs = muted ? '' : `onclick="selectOverviewCategory('${esc}')" style="cursor:pointer" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background=''"` ;
+        const rowAttrs = muted ? '' : `onclick="selectDonutCat('${esc}')" style="cursor:pointer;background:${_bdSelectedCat===cat?'var(--bg-secondary)':''}" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background='${_bdSelectedCat===cat?'var(--bg-secondary)':''}'"` ;
         return `<tr ${rowAttrs}>
           <td style="padding:3px 6px 3px 0;width:12px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${color}"></span></td>
           <td style="padding:3px 4px;font-size:12px;color:${muted ? 'var(--text-muted)' : 'var(--text-primary)'}">${cat}</td>
@@ -1780,6 +1781,27 @@
         const active = _bdTab === id;
         return `<button onclick="selectBreakdownTab('${id}')" style="font-size:11px;padding:4px 10px;border-radius:4px;border:1px solid ${active ? 'var(--accent)' : 'var(--border-light)'};background:${active ? 'var(--accent)' : 'transparent'};color:${active ? '#fff' : 'var(--text-muted)'};cursor:pointer">${label}</button>`;
       };
+      // Inline transaction list for clicked category
+      let _bdTxSection = '';
+      if (_bdSelectedCat) {
+        let _bdCatTxs = _bdBase.filter(t => effectiveCat(t) === _bdSelectedCat);
+        if (_bdTab.startsWith('m:')) {
+          _bdCatTxs = _bdCatTxs.filter(t => t.month === _bdTab.slice(2));
+        } else if (_bdTab === 'yearly') {
+          _bdCatTxs = _bdCatTxs.filter(t => t.month && t.month.startsWith(_bdCurYear));
+        }
+        _bdCatTxs = _bdCatTxs.filter(t => t.debit > 0).sort((a, b) => b.date - a.date);
+        const _bdSelColor = catColor(_bdSelectedCat);
+        _bdTxSection = `<div style="margin-top:16px;border-top:1px solid var(--border-light);padding-top:12px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="font-size:12px;font-weight:600;color:${_bdSelColor}">${_bdSelectedCat}</span>
+            <span style="font-size:11px;color:var(--text-muted)">${_bdCatTxs.length} transaction${_bdCatTxs.length !== 1 ? 's' : ''} · ${fmtAUD(_bdCatTxs.reduce((s,t)=>s+t.debit,0))}</span>
+            <button onclick="selectDonutCat(null)" style="margin-left:auto;font-size:11px;padding:2px 8px;background:transparent;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--text-muted)">✕ Close</button>
+          </div>
+          <div class="budget-tx-list">${renderTxRows(_bdCatTxs.slice(0, 50))}</div>
+        </div>`;
+      }
+
       let spendingBreakdownPanel = '';
       if (_bdAllMonths.length) {
         spendingBreakdownPanel = `<div style="margin-bottom:16px">
@@ -1794,6 +1816,7 @@
               ${_bdDonut.svg || '<div style="padding:24px;color:var(--text-muted);font-size:13px">No data</div>'}
               <div style="flex:1;min-width:180px">${_bdDonut.legend}</div>
             </div>
+            ${_bdTxSection}
           </div>
         </div>`;
       }
@@ -2763,7 +2786,8 @@
     }
 
     function selectMonth(m) { budgetSelectedMonth = m; budgetSelectedCategory = null; budgetSelectedIncomeSource = null; window.scrollTo({top:0}); renderBudget(); }
-    function selectBreakdownTab(tab) { localStorage.setItem('budget_breakdown_tab', tab); renderBudget(); }
+    function selectBreakdownTab(tab) { localStorage.setItem('budget_breakdown_tab', tab); _bdSelectedCat = null; renderBudget(); }
+    function selectDonutCat(cat) { _bdSelectedCat = (_bdSelectedCat === cat) ? null : cat; renderBudget(); }
     function selectYear(yr) {
       budgetSelectedYear = yr === null ? null : yr;
       budgetSelectedMonth = null;
@@ -2986,6 +3010,7 @@
     window.selectCategory = selectCategory;
     window.selectDrillTab = selectDrillTab;
     window.selectBreakdownTab = selectBreakdownTab;
+    window.selectDonutCat = selectDonutCat;
     window.toggleTxSelect = toggleTxSelect;
     window.selectAllVisibleTxs = selectAllVisibleTxs;
     window.clearTxSelection = clearTxSelection;
