@@ -192,11 +192,17 @@
     .budget-tx-balance { flex: 0 0 80px; text-align: right; color: var(--text-muted); font-size: 11px; }
     .budget-tx-row .tx-del-btn { opacity: 0; transition: opacity .15s; }
     .budget-tx-row:hover .tx-del-btn { opacity: 1; }
+    .tx-sel-cb { flex: 0 0 auto; width: 14px; height: 14px; cursor: pointer; accent-color: var(--accent); opacity: 0; transition: opacity .1s; }
+    .budget-tx-row:hover .tx-sel-cb, .tx-sel-cb:checked { opacity: 1; }
+    .tx-bulk-active .tx-sel-cb { opacity: 0.45; }
+    .tx-bulk-active .tx-sel-cb:checked { opacity: 1; }
+    #tx-bulk-bar { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); display: none; align-items: center; gap: 10px; padding: 10px 18px; background: var(--text-primary); color: var(--bg-primary); border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,.35); z-index: 9999; white-space: nowrap; font-size: 13px; font-family: inherit; }
   </style>
 </head>
 <body>
+  <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.76</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.77</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -792,6 +798,82 @@
     let budgetSelectedTab = 'overview';
     let budgetDrillTab = 'transactions';
     let budgetBudgetCat = null;
+    let _txSelIds = new Set();
+    let _txVisibleIds = [];
+
+    function updateBulkBar() {
+      const bar = document.getElementById('tx-bulk-bar');
+      if (!bar) return;
+      const n = _txSelIds.size;
+      // Sync .tx-bulk-active class so faint checkboxes show on all rows
+      document.querySelectorAll('.budget-tx-list').forEach(el => el.classList.toggle('tx-bulk-active', n > 0));
+      if (n === 0) { bar.style.display = 'none'; return; }
+      bar.style.display = 'flex';
+      const visCount = _txVisibleIds.filter(id => !_txSelIds.has(id)).length;
+      bar.innerHTML = `
+        <span style="font-weight:600">${n} selected</span>
+        ${visCount > 0 ? `<button onclick="selectAllVisibleTxs()" style="font-size:12px;padding:5px 12px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:6px;color:inherit;cursor:pointer;font-family:inherit">+ Select all ${_txVisibleIds.length} visible</button>` : ''}
+        <button id="bulk-cat-btn" onclick="openBulkCatPicker(this)" style="font-size:12px;padding:5px 14px;background:var(--accent);border:1px solid var(--accent);border-radius:6px;color:#fff;cursor:pointer;font-family:inherit;font-weight:600">Change category ▾</button>
+        <button onclick="clearTxSelection()" style="font-size:12px;padding:5px 10px;background:transparent;border:1px solid rgba(255,255,255,.25);border-radius:6px;color:inherit;cursor:pointer;font-family:inherit" title="Clear selection">✕</button>`;
+    }
+
+    function toggleTxSelect(id) {
+      if (_txSelIds.has(id)) _txSelIds.delete(id);
+      else _txSelIds.add(id);
+      updateBulkBar();
+    }
+
+    function selectAllVisibleTxs() {
+      _txVisibleIds.forEach(id => _txSelIds.add(id));
+      document.querySelectorAll('.tx-sel-cb').forEach(cb => { if (_txSelIds.has(Number(cb.dataset.txId))) cb.checked = true; });
+      updateBulkBar();
+    }
+
+    function clearTxSelection() {
+      _txSelIds.clear();
+      document.querySelectorAll('.tx-sel-cb').forEach(cb => cb.checked = false);
+      updateBulkBar();
+    }
+
+    function openBulkCatPicker(btn) {
+      document.querySelectorAll('.bulk-cat-picker').forEach(d => d.remove());
+      const picker = document.createElement('div');
+      picker.className = 'bulk-cat-picker';
+      picker.style.cssText = 'position:fixed;z-index:10000;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.25);max-height:320px;overflow-y:auto;min-width:190px;font-family:inherit;padding:4px';
+      Object.entries(CAT_COLORS).sort(([a], [b]) => a === 'Uncategorised' ? 1 : b === 'Uncategorised' ? -1 : a.localeCompare(b)).forEach(([cat, color]) => {
+        const item = document.createElement('div');
+        item.style.cssText = `padding:7px 12px;cursor:pointer;border-radius:6px;font-size:12px;display:flex;align-items:center;gap:8px`;
+        item.innerHTML = `<span style="width:9px;height:9px;border-radius:50%;background:${color};flex-shrink:0"></span><span style="color:var(--text-primary)">${cat}</span>`;
+        item.onmouseenter = () => item.style.background = 'var(--bg-secondary)';
+        item.onmouseleave = () => item.style.background = '';
+        item.onclick = e => { e.stopPropagation(); applyBulkCategory(cat); picker.remove(); };
+        picker.appendChild(item);
+      });
+      const rect = btn.getBoundingClientRect();
+      picker.style.left = rect.left + 'px';
+      picker.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+      document.body.appendChild(picker);
+      setTimeout(() => document.addEventListener('click', function c(e) { if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', c); } }, { once: true }), 0);
+    }
+
+    function applyBulkCategory(cat) {
+      const txMap = new Map(budgetTransactions.map(t => [t.id, t]));
+      const overrides = getManualCats();
+      const keys = new Set();
+      _txSelIds.forEach(id => {
+        const t = txMap.get(id);
+        if (!t) return;
+        const key = vendorName(t.narrative) || cleanMerchant(t.narrative) || t.narrative.trim().slice(0, 50);
+        overrides[key] = cat;
+        keys.add(key);
+      });
+      const count = _txSelIds.size;
+      localStorage.setItem('budget_manual_cats', JSON.stringify(overrides));
+      invalidateCatCache();
+      _txSelIds.clear();
+      showStatus(`✓ "${cat}" applied to ${count} transaction${count !== 1 ? 's' : ''}`);
+      renderBudget();
+    }
 
     try { budgetLimits = JSON.parse(localStorage.getItem('budget_limits') || '{}'); } catch { budgetLimits = {}; }
 
@@ -2362,6 +2444,7 @@
       }
 
       document.getElementById('budgetContent').innerHTML = tabContent;
+      updateBulkBar();
     }
 
     function noData() {
@@ -2404,6 +2487,7 @@
     }
 
     function renderTxRows(txs) {
+      _txVisibleIds = txs.filter(t => t.id != null).map(t => t.id);
       if (!txs.length) return '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">No transactions</div>';
 
       function fmtDateInline(dateStr) {
@@ -2427,7 +2511,9 @@
           catBadge = `<div class="budget-tx-cat-badge" data-narrative="${narrAttr}" style="background:${color}18;color:${color};border-color:${color}40;cursor:pointer;user-select:none">${cat} ▾</div>`;
         }
         const delBtn = t.id != null ? `<button class="tx-del-btn" onclick="event.stopPropagation();deleteTx(${t.id})" style="flex:0 0 auto;background:none;border:none;padding:2px 5px;border-radius:4px;cursor:pointer;font-size:15px;color:#9ca3af;line-height:1" onmouseenter="this.style.color='#ef4444'" onmouseleave="this.style.color='#9ca3af'" title="Delete transaction">×</button>` : '';
+        const cb = t.id != null ? `<input type="checkbox" class="tx-sel-cb" data-tx-id="${t.id}" ${_txSelIds.has(t.id) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleTxSelect(${t.id})">` : '';
         return `<div class="budget-tx-row" style="border-left:3px solid ${color}">
+          ${cb}
           <div class="budget-tx-date">${fmtDateInline(t.dateStr)}</div>
           <div class="budget-tx-merchant" title="${t.narrative}" onclick="showVendorDescModal('${escVKey}')">${merchant}<span class="vendor-edit">✏</span></div>
           ${catBadge}
@@ -2904,6 +2990,11 @@
     window.selectCategory = selectCategory;
     window.selectDrillTab = selectDrillTab;
     window.selectBreakdownTab = selectBreakdownTab;
+    window.toggleTxSelect = toggleTxSelect;
+    window.selectAllVisibleTxs = selectAllVisibleTxs;
+    window.clearTxSelection = clearTxSelection;
+    window.openBulkCatPicker = openBulkCatPicker;
+    window.applyBulkCategory = applyBulkCategory;
     function toggleExcludedCat(cat) {
       if (EXCLUDED_CATS.has(cat)) EXCLUDED_CATS.delete(cat);
       else EXCLUDED_CATS.add(cat);
