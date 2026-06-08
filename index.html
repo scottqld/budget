@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.3</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.4</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -807,6 +807,58 @@
     function catColor(cat) { return CAT_COLORS[cat] || '#9ca3af'; }
     function getMonthlyGoal() { const v = parseFloat(localStorage.getItem('budget_monthly_goal')); return isNaN(v) ? 5000 : v; }
     function saveMonthlyGoal(val) { const v = parseFloat(val); if (!isNaN(v) && v > 0) { localStorage.setItem('budget_monthly_goal', String(v)); renderBudget(); } }
+    function toggleCutbackFixed(cat) {
+      if (_cutbackFixed.has(cat)) { _cutbackFixed.delete(cat); } else { _cutbackFixed.add(cat); }
+      localStorage.setItem('budget_cutback_fixed', JSON.stringify([..._cutbackFixed]));
+      document.querySelectorAll('.cb-row').forEach(row => {
+        const c = row.dataset.cat;
+        const isFixed = _cutbackFixed.has(c);
+        const btn = row.querySelector('.cb-fixed-btn');
+        const slider = row.querySelector('.cb-slider');
+        btn.style.background = isFixed ? 'var(--accent)' : 'var(--bg-secondary)';
+        btn.style.color = isFixed ? '#fff' : 'var(--text-muted)';
+        btn.style.borderColor = isFixed ? 'var(--accent)' : 'var(--border)';
+        slider.disabled = isFixed;
+        if (isFixed) slider.value = 0;
+      });
+      autoDistributeCutbacks();
+    }
+    function autoDistributeCutbacks() {
+      const container = document.getElementById('cb-planner');
+      if (!container) return;
+      const goal = getMonthlyGoal();
+      const rows = [...document.querySelectorAll('.cb-row')];
+      const flexRows = rows.filter(r => !_cutbackFixed.has(r.dataset.cat));
+      const flexTotal = flexRows.reduce((s, r) => s + parseFloat(r.dataset.avg), 0);
+      const totalAvg = parseFloat(container.dataset.avg);
+      const pct = flexTotal > 0 ? Math.min(Math.max((totalAvg - goal) / flexTotal * 100, 0), 100) : 0;
+      flexRows.forEach(r => { r.querySelector('.cb-slider').value = pct.toFixed(0); });
+      updateCutbackPlan();
+    }
+    function updateCutbackPlan() {
+      const container = document.getElementById('cb-planner');
+      if (!container) return;
+      const goal = getMonthlyGoal();
+      const totalAvg = parseFloat(container.dataset.avg);
+      const gap = totalAvg - goal;
+      let totalSavings = 0;
+      document.querySelectorAll('.cb-row').forEach(row => {
+        const avg = parseFloat(row.dataset.avg);
+        const pct = parseFloat(row.querySelector('.cb-slider').value) / 100;
+        const savings = avg * pct;
+        totalSavings += savings;
+        row.querySelector('.cb-pct').textContent = Math.round(pct * 100) + '%';
+        row.querySelector('.cb-save').textContent = savings > 0.5 ? '−' + fmtAUD(savings) : '—';
+        row.querySelector('.cb-target').textContent = fmtAUD(avg - savings);
+      });
+      const remaining = gap - totalSavings;
+      const summaryEl = document.getElementById('cb-summary');
+      if (summaryEl) summaryEl.innerHTML = remaining <= 0
+        ? `<span style="color:#16a34a;font-weight:600">✓ Goal reached!</span> <span style="font-size:11px;color:var(--text-muted)">Buffer: +${fmtAUD(Math.abs(remaining))}/mo</span>`
+        : `<span style="color:#ef4444;font-weight:600">${fmtAUD(remaining)}/mo still to cut</span>`;
+      const bar = document.getElementById('cb-progress-bar');
+      if (bar) { bar.style.width = Math.min(totalSavings / Math.max(gap, 1) * 100, 100) + '%'; bar.style.background = remaining <= 0 ? '#16a34a' : '#f59e0b'; }
+    }
     function getSubcatParents() { try { return JSON.parse(localStorage.getItem('budget_subcat_parents') || '{}'); } catch { return {}; } }
     function parentOf(cat) { return getSubcatParents()[cat] || null; }
     function childrenOf(parent) { const p = getSubcatParents(); return Object.entries(p).filter(([,v]) => v === parent).map(([k]) => k).sort(); }
@@ -864,6 +916,8 @@
     let _bdSelectedCat = null;
     let _txSelIds = new Set();
     let _txVisibleIds = [];
+    let _cutbackFixed = new Set();
+    try { _cutbackFixed = new Set(JSON.parse(localStorage.getItem('budget_cutback_fixed') || '[]')); } catch {}
 
     function updateBulkBar() {
       const bar = document.getElementById('tx-bulk-bar');
@@ -2366,7 +2420,61 @@
           </div>
         </div>`;
 
-        const _ovPanels = { cards, goal: goalPanel, breakdown: spendingBreakdownPanel, monthlyCompare: monthlyComparePanel };
+        // Cutback Planner panel
+        const _cbNow = new Date().toISOString().slice(0, 7);
+        const _cbLast3Months = monthlyTotals().filter(([m]) => m < _cbNow).slice(-3).map(([m]) => m);
+        const _cbN = _cbLast3Months.length || 1;
+        const _cbCatSpend = {};
+        budgetTransactions.forEach(t => {
+          if (!_cbLast3Months.includes(t.month) || t.debit <= 0) return;
+          const _cbc = effectiveCat(t);
+          if (EXCLUDED_CATS.has(_cbc) || _cbc === 'Uncategorised') return;
+          _cbCatSpend[_cbc] = (_cbCatSpend[_cbc] || 0) + t.debit;
+        });
+        const _cbAvgs = Object.entries(rollToParents(_cbCatSpend)).map(([cat, total]) => [cat, total / _cbN]).filter(([, a]) => a > 0).sort((a, b) => b[1] - a[1]);
+        const _cbTotalAvg = _cbAvgs.reduce((s, [, a]) => s + a, 0);
+        const _cbGoal = getMonthlyGoal();
+        const _cbGap = _cbTotalAvg - _cbGoal;
+        let cutbackPanel = '';
+        if (_cbAvgs.length > 0 && _cbGap > 0) {
+          const _cbFlexTotal = _cbAvgs.filter(([cat]) => !_cutbackFixed.has(cat)).reduce((s, [, a]) => s + a, 0);
+          const _cbAutoPct = _cbFlexTotal > 0 ? Math.min(_cbGap / _cbFlexTotal * 100, 100) : 0;
+          const cbRows = _cbAvgs.map(([cat, avg]) => {
+            const isFixed = _cutbackFixed.has(cat);
+            const pct = isFixed ? 0 : _cbAutoPct;
+            const savings = avg * pct / 100;
+            const color = catColor(cat);
+            return `<div class="cb-row" data-cat="${cat.replace(/"/g, '&quot;')}" data-avg="${avg.toFixed(2)}" style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-light)">
+              <div style="flex:1;display:flex;align-items:center;gap:6px;min-width:0">
+                <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
+                <span style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cat}</span>
+                <span style="font-size:11px;color:var(--text-muted);flex-shrink:0">${fmtAUD(avg)}/mo</span>
+              </div>
+              <input type="range" class="cb-slider" min="0" max="100" step="1" value="${pct.toFixed(0)}" ${isFixed ? 'disabled' : ''} oninput="updateCutbackPlan()" style="width:100px;flex-shrink:0;accent-color:${color}">
+              <span class="cb-pct" style="font-size:11px;color:var(--text-muted);flex:0 0 30px;text-align:right">${Math.round(pct)}%</span>
+              <span class="cb-save" style="font-size:11px;color:var(--accent);flex:0 0 76px;text-align:right">${savings > 0.5 ? '−'+fmtAUD(savings) : '—'}</span>
+              <span style="font-size:11px;color:var(--text-muted)">→</span>
+              <span class="cb-target" style="font-size:11px;font-weight:600;flex:0 0 76px">${fmtAUD(avg - savings)}</span>
+              <button class="cb-fixed-btn" onclick="toggleCutbackFixed(this.closest('.cb-row').dataset.cat)" style="font-size:10px;padding:2px 8px;border:1px solid ${isFixed ? 'var(--accent)' : 'var(--border)'};border-radius:4px;background:${isFixed ? 'var(--accent)' : 'var(--bg-secondary)'};color:${isFixed ? '#fff' : 'var(--text-muted)'};cursor:pointer;flex-shrink:0">Fixed</button>
+            </div>`;
+          }).join('');
+          cutbackPanel = `<div style="margin-bottom:16px">
+            <div class="budget-section-title" style="margin-bottom:10px">Cutback Planner
+              <span style="font-size:12px;font-weight:400;color:var(--text-muted);margin-left:6px">3-month avg · drag sliders to plan cuts</span>
+              <button onclick="autoDistributeCutbacks()" style="margin-left:10px;font-size:10px;padding:2px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-secondary);color:var(--text-muted);cursor:pointer">Auto-distribute</button>
+            </div>
+            <div class="budget-panel-box" style="padding:14px 16px" id="cb-planner" data-avg="${_cbTotalAvg.toFixed(2)}">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+                <div style="font-size:12px;color:var(--text-muted)">Avg/mo: <strong style="color:var(--text-primary)">${fmtAUD(_cbTotalAvg)}</strong> &nbsp;·&nbsp; Goal: <strong style="color:var(--text-primary)">${fmtAUD(_cbGoal)}</strong> &nbsp;·&nbsp; Gap: <strong style="color:#ef4444">${fmtAUD(_cbGap)}</strong></div>
+                <div id="cb-summary"><span style="color:#ef4444;font-weight:600">${fmtAUD(_cbGap)}/mo to cut</span></div>
+              </div>
+              <div style="height:6px;background:var(--bg-secondary);border-radius:3px;margin-bottom:14px;overflow:hidden"><div id="cb-progress-bar" style="height:100%;border-radius:3px;background:#f59e0b;width:0%;transition:width 0.3s"></div></div>
+              ${cbRows}
+            </div>
+          </div>`;
+        }
+
+        const _ovPanels = { cards, goal: goalPanel, cutback: cutbackPanel, breakdown: spendingBreakdownPanel, monthlyCompare: monthlyComparePanel };
         const _ovOrder = getOverviewOrder();
         const _ovFull = [..._ovOrder.filter(id => id in _ovPanels), ...OV_DEFAULT_ORDER.filter(id => !_ovOrder.includes(id) && id in _ovPanels)];
         const _ovHtml = _ovFull.map(id => _ovPanels[id] ? ovDraggable(id, _ovPanels[id]) : '').join('');
@@ -2633,6 +2741,7 @@
 
       document.getElementById('budgetContent').innerHTML = tabContent;
       updateBulkBar();
+      updateCutbackPlan();
     }
 
     function noData() {
@@ -2703,7 +2812,7 @@
       'budget_limits', 'budget_excluded_cats', 'budget_excluded_accounts',
       'budget_merchant_cats', 'budget_vendor_descs', 'budget_collapsed',
       'budget_overview_order', 'budget_brand_norms', 'budget_subcat_parents',
-      'budget_monthly_goal'
+      'budget_monthly_goal', 'budget_cutback_fixed'
     ];
 
     async function exportAllData() {
@@ -2844,7 +2953,7 @@
       if (content) content.style.display = s.has(id) ? 'none' : '';
       if (btn) btn.textContent = s.has(id) ? '›' : '⌄';
     }
-    const OV_DEFAULT_ORDER = ['cards', 'goal', 'breakdown', 'monthlyCompare'];
+    const OV_DEFAULT_ORDER = ['cards', 'goal', 'cutback', 'breakdown', 'monthlyCompare'];
     function getOverviewOrder() {
       try {
         const o = JSON.parse(localStorage.getItem('budget_overview_order') || '[]');
