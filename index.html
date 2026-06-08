@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.98</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.99</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -805,6 +805,8 @@
     })();
 
     function catColor(cat) { return CAT_COLORS[cat] || '#9ca3af'; }
+    function getMonthlyGoal() { const v = parseFloat(localStorage.getItem('budget_monthly_goal')); return isNaN(v) ? 5000 : v; }
+    function saveMonthlyGoal(val) { const v = parseFloat(val); if (!isNaN(v) && v > 0) { localStorage.setItem('budget_monthly_goal', String(v)); renderBudget(); } }
     function getSubcatParents() { try { return JSON.parse(localStorage.getItem('budget_subcat_parents') || '{}'); } catch { return {}; } }
     function parentOf(cat) { return getSubcatParents()[cat] || null; }
     function childrenOf(parent) { const p = getSubcatParents(); return Object.entries(p).filter(([,v]) => v === parent).map(([k]) => k).sort(); }
@@ -1985,7 +1987,10 @@
         </div>`;
       }).join('');
       const annualPanel = sec('annual', 'Annual trend', `<div class="budget-trend-wrap"><div class="budget-trend">${annualBars}</div></div>`, legend);
-      const trendPanel  = sec('trend',  'Monthly trend', `<div class="budget-trend-wrap"><div class="budget-trend">${trendBars}</div></div>`, legend);
+      const _tGoal = getMonthlyGoal();
+      const _tGoalPx = Math.round((_tGoal / maxM) * H);
+      const _tGoalLine = (_tGoal > 0 && _tGoalPx > 0 && _tGoalPx <= H) ? `<div style="position:absolute;left:0;right:0;bottom:${28 + _tGoalPx}px;border-top:2px dashed #f59e0b;pointer-events:none;z-index:1"><span style="position:absolute;right:4px;top:-15px;font-size:10px;font-weight:600;color:#f59e0b;background:var(--bg-card);padding:1px 5px;border-radius:3px;border:1px solid #f59e0b22">goal ${fmtAUD(_tGoal)}</span></div>` : '';
+      const trendPanel  = sec('trend',  'Monthly trend', `<div class="budget-trend-wrap"><div style="position:relative"><div class="budget-trend">${trendBars}</div>${_tGoalLine}</div></div>`, legend);
 
       // Category drill-down: merchant breakdown for selected category (incl. sub-cats)
       let catDetailPanel = '';
@@ -2314,7 +2319,58 @@
           </div>
         </div>`;
 
-        const _ovPanels = { cards, savings: savingsPanel, annual: annualSummaryPanel, breakdown: spendingBreakdownPanel, compare: comparePanel, monthlyCompare: monthlyComparePanel };
+        // Monthly spending goal panel
+        const _mgGoal = getMonthlyGoal();
+        const _mgNow = new Date().toISOString().slice(0, 7);
+        const _mgMonthly = monthlyTotals();
+        const _mgCurData = _mgMonthly.find(([m]) => m === _mgNow);
+        const _mgCurSpend = _mgCurData ? _mgCurData[1].exp : 0;
+        const _mgCompleted = _mgMonthly.filter(([m]) => m < _mgNow);
+        const _mgLast3 = _mgCompleted.slice(-3);
+        const _mgPrior3 = _mgCompleted.slice(-6, -3);
+        const _mgAvg = _mgLast3.length ? _mgLast3.reduce((s, [, d]) => s + d.exp, 0) / _mgLast3.length : 0;
+        const _mgPriorAvg = _mgPrior3.length ? _mgPrior3.reduce((s, [, d]) => s + d.exp, 0) / _mgPrior3.length : 0;
+        const _mgPct = Math.min((_mgCurSpend / _mgGoal) * 100, 110);
+        const _mgOver = _mgCurSpend > _mgGoal;
+        const _mgBarColor = _mgOver ? '#ef4444' : '#16a34a';
+        const _mgAvgDiff = _mgAvg - _mgGoal;
+        const _mgAvgColor = _mgAvgDiff <= 0 ? '#16a34a' : '#ef4444';
+        const _mgTrendDown = _mgPrior3.length >= 1 && _mgAvg < _mgPriorAvg;
+        const _mgTrendColor = _mgTrendDown ? '#16a34a' : '#f59e0b';
+        const _mgTrendText = _mgPrior3.length < 1 ? '' : (_mgTrendDown ? `↓ Trending down ${fmtAUD(Math.abs(_mgAvg - _mgPriorAvg))}/mo` : `↑ Trending up ${fmtAUD(Math.abs(_mgAvg - _mgPriorAvg))}/mo`);
+        const goalPanel = `<div style="margin-bottom:16px">
+          <div class="budget-section-title" style="margin-bottom:10px">Spending Goal
+            <span style="font-size:12px;font-weight:400;color:var(--text-muted);margin-left:8px">Monthly target</span>
+          </div>
+          <div class="budget-panel-box" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+              <div style="flex:1;min-width:200px">
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Target / month</div>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:18px;font-weight:700;color:var(--text-primary)">${fmtAUD(_mgGoal)}</span>
+                  <button onclick="(function(){const i=document.getElementById('mgGoalInput');if(i){i.style.display=i.style.display==='none'?'inline-block':'none';if(i.style.display!=='none'){i.focus();i.select();}}})();" style="font-size:10px;padding:2px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-secondary);color:var(--text-muted);cursor:pointer">Edit</button>
+                  <input id="mgGoalInput" type="number" value="${_mgGoal}" style="display:none;width:100px;padding:3px 6px;border:1px solid var(--accent);border-radius:6px;font-size:13px;background:var(--bg-card);color:var(--text-primary)" onkeydown="if(event.key==='Enter'){saveMonthlyGoal(this.value)}else if(event.key==='Escape'){this.style.display='none'}" onblur="if(this.value&&this.value!==${_mgGoal})saveMonthlyGoal(this.value);else this.style.display='none'">
+                </div>
+              </div>
+              ${_mgTrendText ? `<div style="font-size:12px;font-weight:600;color:${_mgTrendColor}">${_mgTrendText}</div>` : ''}
+            </div>
+            <div style="margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:4px">
+                <span>This month (${fmtMonth(_mgNow)})</span>
+                <span style="font-weight:600;color:${_mgBarColor}">${fmtAUD(_mgCurSpend)} / ${fmtAUD(_mgGoal)}${_mgOver ? ' — over by ' + fmtAUD(_mgCurSpend - _mgGoal) : ''}</span>
+              </div>
+              <div style="height:8px;background:var(--bg-secondary);border-radius:4px;overflow:hidden">
+                <div style="height:100%;border-radius:4px;background:${_mgBarColor};width:${Math.min(_mgPct, 100)}%;transition:width 0.3s"></div>
+              </div>
+            </div>
+            ${_mgAvg > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;padding-top:10px;border-top:1px solid var(--border-light)">
+              <span style="color:var(--text-muted)">3-month avg spend</span>
+              <span style="font-weight:600;color:${_mgAvgColor}">${fmtAUD(_mgAvg)} <span style="font-weight:400;font-size:11px">(${_mgAvgDiff > 0 ? '+' : '−'}${fmtAUD(Math.abs(_mgAvgDiff))} vs goal)</span></span>
+            </div>` : ''}
+          </div>
+        </div>`;
+
+        const _ovPanels = { cards, goal: goalPanel, savings: savingsPanel, annual: annualSummaryPanel, breakdown: spendingBreakdownPanel, compare: comparePanel, monthlyCompare: monthlyComparePanel };
         const _ovOrder = getOverviewOrder();
         const _ovFull = [..._ovOrder.filter(id => id in _ovPanels), ...OV_DEFAULT_ORDER.filter(id => !_ovOrder.includes(id) && id in _ovPanels)];
         const _ovHtml = _ovFull.map(id => _ovPanels[id] ? ovDraggable(id, _ovPanels[id]) : '').join('');
@@ -2650,7 +2706,8 @@
       'budget_custom_cats', 'budget_cat_renames', 'budget_manual_cats',
       'budget_limits', 'budget_excluded_cats', 'budget_excluded_accounts',
       'budget_merchant_cats', 'budget_vendor_descs', 'budget_collapsed',
-      'budget_overview_order', 'budget_brand_norms', 'budget_subcat_parents'
+      'budget_overview_order', 'budget_brand_norms', 'budget_subcat_parents',
+      'budget_monthly_goal'
     ];
 
     async function exportAllData() {
@@ -2791,7 +2848,7 @@
       if (content) content.style.display = s.has(id) ? 'none' : '';
       if (btn) btn.textContent = s.has(id) ? '›' : '⌄';
     }
-    const OV_DEFAULT_ORDER = ['cards', 'monthlyCompare', 'savings', 'annual', 'breakdown', 'compare'];
+    const OV_DEFAULT_ORDER = ['cards', 'goal', 'monthlyCompare', 'savings', 'annual', 'breakdown', 'compare'];
     function getOverviewOrder() {
       try {
         const o = JSON.parse(localStorage.getItem('budget_overview_order') || '[]');
