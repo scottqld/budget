@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.95</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.96</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -808,6 +808,8 @@
     function getSubcatParents() { try { return JSON.parse(localStorage.getItem('budget_subcat_parents') || '{}'); } catch { return {}; } }
     function parentOf(cat) { return getSubcatParents()[cat] || null; }
     function childrenOf(parent) { const p = getSubcatParents(); return Object.entries(p).filter(([,v]) => v === parent).map(([k]) => k).sort(); }
+    // Returns a Set of the category + all its sub-categories (for inclusive filtering)
+    function catGroup(cat) { return new Set([cat, ...childrenOf(cat)]); }
 
     // Auto-wire known hierarchies for any existing categories not yet mapped
     (function initSubcatDefaults() {
@@ -1959,11 +1961,13 @@
       const annualPanel = sec('annual', 'Annual trend', `<div class="budget-trend-wrap"><div class="budget-trend">${annualBars}</div></div>`, legend);
       const trendPanel  = sec('trend',  'Monthly trend', `<div class="budget-trend-wrap"><div class="budget-trend">${trendBars}</div></div>`, legend);
 
-      // Category drill-down: merchant breakdown for the selected category
+      // Category drill-down: merchant breakdown for selected category (incl. sub-cats)
       let catDetailPanel = '';
       let catDrillPanel = '';
       if (budgetSelectedCategory) {
-        const catTxs = txs.filter(t => effectiveCat(t) === budgetSelectedCategory);
+        const _selGroup = catGroup(budgetSelectedCategory);
+        const _selChildren = childrenOf(budgetSelectedCategory);
+        const catTxs = txs.filter(t => _selGroup.has(effectiveCat(t)));
         const catTotal = catTxs.reduce((s, t) => s + t.debit, 0);
         const catMerch = {};
         catTxs.forEach(t => {
@@ -1989,8 +1993,9 @@
         const drillContent = budgetDrillTab === 'transactions'
           ? `<div class="budget-tx-list">${renderTxRows(catTxsSorted)}</div>`
           : `<div class="budget-panel-box">${catMerchRows || noData()}</div>`;
+        const _subLabel = _selChildren.length ? `<span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:6px">+ ${_selChildren.join(', ')}</span>` : '';
         catDrillPanel = `<div style="margin-bottom:24px;border-left:4px solid ${selColor};padding-left:14px">
-          <div class="budget-section-title" style="margin-bottom:12px;color:${selColor}">${budgetSelectedCategory}
+          <div class="budget-section-title" style="margin-bottom:12px;color:${selColor}">${budgetSelectedCategory}${_subLabel}
             <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:8px">${fmtAUD(catTotal)} total · ${catTxs.length} transactions</span>
             <button onclick="selectCategory(null)" style="font-size:11px;padding:2px 8px;margin-left:12px;cursor:pointer;background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;color:var(--text-muted)">✕ Clear</button>
           </div>
@@ -2001,7 +2006,7 @@
           ${drillContent}
         </div>`;
         catDetailPanel = `<div style="margin-bottom:24px;border-left:4px solid ${selColor};padding-left:14px">
-          <div class="budget-section-title" style="margin-bottom:10px;color:${selColor}">${budgetSelectedCategory}
+          <div class="budget-section-title" style="margin-bottom:10px;color:${selColor}">${budgetSelectedCategory}${_subLabel}
             <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:8px">${fmtAUD(catTotal)} total · ${catTxs.length} transactions</span>
             <button onclick="selectCategory(null)" style="font-size:11px;padding:2px 8px;margin-left:12px;cursor:pointer;background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;color:var(--text-muted)">✕ Clear</button>
           </div>
@@ -2028,7 +2033,7 @@
         </div>`;
       }
 
-      const catFiltered = budgetSelectedCategory ? txs.filter(t => effectiveCat(t) === budgetSelectedCategory) : txs;
+      const catFiltered = budgetSelectedCategory ? txs.filter(t => catGroup(budgetSelectedCategory).has(effectiveCat(t))) : txs;
       const sorted = catFiltered.slice().sort((a, b) => b.date - a.date);
       const txRows = renderTxRows(sorted.slice(0, 200));
       const txTitle = budgetSelectedCategory
@@ -2465,10 +2470,11 @@
           const color = catColor(cat);
           const lim = budgetLimits[cat];
 
-          // Monthly spend for this category across all time
+          // Monthly spend for this category (incl. sub-cats) across all time
+          const _budgetSelGroup = catGroup(cat);
           const catMonthSpend = {};
           bBase.forEach(t => {
-            if (t.debit <= 0 || effectiveCat(t) !== cat) return;
+            if (t.debit <= 0 || !_budgetSelGroup.has(effectiveCat(t))) return;
             catMonthSpend[t.month] = (catMonthSpend[t.month] || 0) + t.debit;
           });
           const maxMoSpend = Math.max(...Object.values(catMonthSpend), 0.01);
@@ -2493,8 +2499,8 @@
             </div>`;
           }).join('');
 
-          // Transactions filtered by selected period
-          let catTxs = bBase.filter(t => t.debit > 0 && effectiveCat(t) === cat);
+          // Transactions filtered by selected period (incl. sub-cats)
+          let catTxs = bBase.filter(t => t.debit > 0 && _budgetSelGroup.has(effectiveCat(t)));
           if (budgetSelectedMonth) catTxs = catTxs.filter(t => t.month === budgetSelectedMonth);
           else if (budgetSelectedYear) catTxs = catTxs.filter(t => t.month.startsWith(budgetSelectedYear));
           catTxs.sort((a, b) => b.date - a.date);
@@ -2573,7 +2579,7 @@
       const countEl = document.getElementById('txSearchCount');
       if (!ql) {
         let txs = filtered().slice().sort((a, b) => b.date - a.date);
-        if (budgetSelectedCategory) txs = txs.filter(t => effectiveCat(t) === budgetSelectedCategory);
+        if (budgetSelectedCategory) { const _sg = catGroup(budgetSelectedCategory); txs = txs.filter(t => _sg.has(effectiveCat(t))); }
         if (countEl) countEl.textContent = '';
         document.getElementById('txList').innerHTML = renderTxRows(txs.slice(0, 200));
         return;
