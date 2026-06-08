@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.1</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.2</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -2362,7 +2362,7 @@
           </div>
         </div>`;
 
-        const _ovPanels = { cards, goal: goalPanel, savings: savingsPanel, annual: annualSummaryPanel, breakdown: spendingBreakdownPanel, compare: comparePanel, monthlyCompare: monthlyComparePanel };
+        const _ovPanels = { cards, goal: goalPanel, savings: savingsPanel, annual: annualSummaryPanel, breakdown: spendingBreakdownPanel, monthlyCompare: monthlyComparePanel };
         const _ovOrder = getOverviewOrder();
         const _ovFull = [..._ovOrder.filter(id => id in _ovPanels), ...OV_DEFAULT_ORDER.filter(id => !_ovOrder.includes(id) && id in _ovPanels)];
         const _ovHtml = _ovFull.map(id => _ovPanels[id] ? ovDraggable(id, _ovPanels[id]) : '').join('');
@@ -2840,7 +2840,7 @@
       if (content) content.style.display = s.has(id) ? 'none' : '';
       if (btn) btn.textContent = s.has(id) ? '›' : '⌄';
     }
-    const OV_DEFAULT_ORDER = ['cards', 'goal', 'monthlyCompare', 'savings', 'annual', 'breakdown', 'compare'];
+    const OV_DEFAULT_ORDER = ['cards', 'goal', 'monthlyCompare', 'savings', 'annual', 'breakdown'];
     function getOverviewOrder() {
       try {
         const o = JSON.parse(localStorage.getItem('budget_overview_order') || '[]');
