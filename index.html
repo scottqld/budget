@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.4</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.5</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -605,22 +605,62 @@
     function invalidateCatCache() {
       _manualCats = null; _merchantCats = null; _catRenames = null; _autoCatCache.clear(); _effectiveCatCache.clear();
     }
-    function setCatOverride(narrative, cat) {
+    function showScopeModal(title, body, labelThis, labelAll, onThis, onAll) {
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10001;display:flex;align-items:center;justify-content:center';
+      overlay.innerHTML = `<div style="background:var(--bg-card);border-radius:12px;padding:24px;width:360px;max-width:90vw;box-shadow:0 8px 40px rgba(0,0,0,.3);font-family:inherit">
+        <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:8px">${title}</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px">${body}</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button id="sm-this" class="primary" style="font-size:13px;padding:10px 16px;text-align:left;border-radius:8px;cursor:pointer">${labelThis}</button>
+          <button id="sm-all" style="font-size:13px;padding:10px 16px;text-align:left;border:1px solid var(--border);border-radius:8px;background:var(--bg-secondary);cursor:pointer;color:var(--text-primary)">${labelAll}</button>
+          <button id="sm-cancel" style="font-size:13px;padding:7px 16px;background:transparent;border:none;color:var(--text-muted);cursor:pointer">Cancel</button>
+        </div>
+      </div>`;
+      document.body.appendChild(overlay);
+      overlay.querySelector('#sm-this').onclick = () => { overlay.remove(); onThis(); };
+      overlay.querySelector('#sm-all').onclick = () => { overlay.remove(); onAll(); };
+      overlay.querySelector('#sm-cancel').onclick = () => overlay.remove();
+      overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    }
+    function setCatOverride(txId, narrative, cat) {
       const key = vendorName(narrative) || cleanMerchant(narrative) || narrative.trim().slice(0, 50);
-      const overrides = getManualCats();
-      if (!cat || cat === 'Uncategorised') delete overrides[key];
-      else overrides[key] = cat;
-      localStorage.setItem('budget_manual_cats', JSON.stringify(overrides));
-      invalidateCatCache();
-      if (cat && cat !== 'Uncategorised') {
-        const count = budgetTransactions.filter(t => (t.vendor || vendorName(t.narrative)) === key).length;
-        if (count > 1) showStatus(`✓ "${cat}" applied to ${count} ${key} transactions`);
-        else showStatus(`✓ Categorised as ${cat}`);
+      const similar = budgetTransactions.filter(t => (t.vendor || vendorName(t.narrative)) === key);
+      const applyAll = () => {
+        const overrides = getManualCats();
+        if (!cat || cat === 'Uncategorised') delete overrides[key];
+        else overrides[key] = cat;
+        localStorage.setItem('budget_manual_cats', JSON.stringify(overrides));
+        // Clear any per-tx override for this vendor so vendor-level wins
+        similar.forEach(t => { if (_txIdCats[String(t.id)]) { delete _txIdCats[String(t.id)]; } });
+        localStorage.setItem('budget_txid_cats', JSON.stringify(_txIdCats));
+        invalidateCatCache();
+        showStatus(`✓ "${cat}" applied to ${similar.length} transactions`);
+        renderBudget();
+      };
+      const applyOne = () => {
+        if (txId == null) { applyAll(); return; }
+        _txIdCats[String(txId)] = cat;
+        localStorage.setItem('budget_txid_cats', JSON.stringify(_txIdCats));
+        invalidateCatCache();
+        showStatus(`✓ "${cat}" applied to this transaction only`);
+        renderBudget();
+      };
+      if (similar.length > 1 && txId != null) {
+        showScopeModal(
+          `Categorise as "${cat}"`,
+          `${similar.length} transactions share this vendor.`,
+          'Just this transaction',
+          `All ${similar.length} similar transactions`,
+          applyOne, applyAll
+        );
+      } else {
+        applyAll();
       }
-      renderBudget();
     }
     function openCatDropdown(el) {
       const narrative = el.dataset.narrative;
+      const txId = el.dataset.txId != null ? Number(el.dataset.txId) : null;
       document.querySelectorAll('.cat-dropdown').forEach(d => d.remove());
       const currentCat = effectiveCat(budgetTransactions.find(t => t.narrative === narrative) || { narrative, category: '' });
       const dropdown = document.createElement('div');
@@ -634,7 +674,7 @@
         item.innerHTML = `${indent ? '<span style="font-size:10px;color:var(--text-muted);flex-shrink:0">↳</span>' : ''}<span style="display:inline-block;width:${indent?7:8}px;height:${indent?7:8}px;border-radius:50%;background:${color};flex-shrink:0"></span><span style="color:${color}">${cat}${isCur ? ' ✓' : ''}</span>`;
         item.onmouseenter = () => item.style.background = 'var(--bg-secondary)';
         item.onmouseleave = () => item.style.background = '';
-        item.onclick = e => { e.stopPropagation(); setCatOverride(narrative, cat); dropdown.remove(); };
+        item.onclick = e => { e.stopPropagation(); setCatOverride(txId, narrative, cat); dropdown.remove(); };
         dropdown.appendChild(item);
       };
       // Top-level cats (not sub-cats) sorted A-Z, with their children below
@@ -728,6 +768,7 @@
     }
 
     function effectiveCat(t) {
+      if (t.id != null && _txIdCats[String(t.id)]) return _txIdCats[String(t.id)];
       const key = t.narrative;
       if (_effectiveCatCache.has(key)) return _effectiveCatCache.get(key);
       const merchantKey = cleanMerchant(key) || key.trim().slice(0, 50);
@@ -918,6 +959,10 @@
     let _txVisibleIds = [];
     let _cutbackFixed = new Set();
     try { _cutbackFixed = new Set(JSON.parse(localStorage.getItem('budget_cutback_fixed') || '[]')); } catch {}
+    let _txIdCats = {};
+    try { _txIdCats = JSON.parse(localStorage.getItem('budget_txid_cats') || '{}'); } catch {}
+    let _txIdDescs = {};
+    try { _txIdDescs = JSON.parse(localStorage.getItem('budget_txid_descs') || '{}'); } catch {}
 
     function updateBulkBar() {
       const bar = document.getElementById('tx-bulk-bar');
@@ -2759,24 +2804,25 @@
 
       return txs.map(t => {
         const vendorKey = t.vendor || vendorName(t.narrative);
-        const merchant = displayVendor(vendorKey);
+        const merchant = (t.id != null && _txIdDescs[String(t.id)]) ? _txIdDescs[String(t.id)] : displayVendor(vendorKey);
         const escVKey = vendorKey.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const cat = effectiveCat(t);
         const color = catColor(cat);
         const bal = t.balance ? `<div class="budget-tx-balance">${fmtAUD(t.balance)}</div>` : '';
         const narrAttr = t.narrative.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
         let catBadge;
+        const txIdAttr = t.id != null ? ` data-tx-id="${t.id}"` : '';
         if (cat === 'Uncategorised') {
-          catBadge = `<div class="budget-tx-cat-badge" data-narrative="${narrAttr}" style="background:#D9775720;color:#D97757;border-color:#D9775760;border-style:dashed;cursor:pointer;user-select:none;font-weight:600">+ Categorise</div>`;
+          catBadge = `<div class="budget-tx-cat-badge" data-narrative="${narrAttr}"${txIdAttr} style="background:#D9775720;color:#D97757;border-color:#D9775760;border-style:dashed;cursor:pointer;user-select:none;font-weight:600">+ Categorise</div>`;
         } else {
-          catBadge = `<div class="budget-tx-cat-badge" data-narrative="${narrAttr}" style="background:${color}18;color:${color};border-color:${color}40;cursor:pointer;user-select:none">${cat} ▾</div>`;
+          catBadge = `<div class="budget-tx-cat-badge" data-narrative="${narrAttr}"${txIdAttr} style="background:${color}18;color:${color};border-color:${color}40;cursor:pointer;user-select:none">${cat} ▾</div>`;
         }
         const delBtn = t.id != null ? `<button class="tx-del-btn" onclick="event.stopPropagation();deleteTx(${t.id})" style="flex:0 0 auto;background:none;border:none;padding:2px 5px;border-radius:4px;cursor:pointer;font-size:15px;color:#9ca3af;line-height:1" onmouseenter="this.style.color='#ef4444'" onmouseleave="this.style.color='#9ca3af'" title="Delete transaction">×</button>` : '';
         const cb = t.id != null ? `<input type="checkbox" class="tx-sel-cb" data-tx-id="${t.id}" ${_txSelIds.has(t.id) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleTxSelect(${t.id})">` : '';
         return `<div class="budget-tx-row" style="border-left:3px solid ${color}">
           ${cb}
           <div class="budget-tx-date">${fmtDateInline(t.dateStr)}</div>
-          <div class="budget-tx-merchant" title="${t.narrative}" onclick="showVendorDescModal('${escVKey}')">${merchant}<span class="vendor-edit">✏</span></div>
+          <div class="budget-tx-merchant" title="${t.narrative}" onclick="showVendorDescModal('${escVKey}', ${t.id ?? 'null'})">${merchant}<span class="vendor-edit">✏</span></div>
           ${catBadge}
           <div class="budget-tx-amount ${t.debit > 0 ? 'expense' : 'income'}">${t.debit > 0 ? '−' + fmtAUD(t.debit) : '+' + fmtAUD(t.credit)}</div>
           ${bal}
@@ -2812,7 +2858,7 @@
       'budget_limits', 'budget_excluded_cats', 'budget_excluded_accounts',
       'budget_merchant_cats', 'budget_vendor_descs', 'budget_collapsed',
       'budget_overview_order', 'budget_brand_norms', 'budget_subcat_parents',
-      'budget_monthly_goal', 'budget_cutback_fixed'
+      'budget_monthly_goal', 'budget_cutback_fixed', 'budget_txid_cats', 'budget_txid_descs'
     ];
 
     async function exportAllData() {
@@ -3134,10 +3180,12 @@
     }
 
     let _editingVendorKey = null;
-    function showVendorDescModal(vendorKey) {
+    let _editingVendorTxId = null;
+    function showVendorDescModal(vendorKey, txId) {
       document.querySelectorAll('.vendor-desc-modal').forEach(d => d.remove());
       _editingVendorKey = vendorKey;
-      const current = getVendorDescs()[vendorKey] || '';
+      _editingVendorTxId = txId ?? null;
+      const current = (_editingVendorTxId != null && _txIdDescs[String(_editingVendorTxId)]) ? _txIdDescs[String(_editingVendorTxId)] : (getVendorDescs()[vendorKey] || '');
       const overlay = document.createElement('div');
       overlay.className = 'vendor-desc-modal';
       overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center';
@@ -3165,9 +3213,28 @@
     }
     function saveVendorDesc() {
       const desc = (document.getElementById('vendorDescInput')?.value || '').trim();
-      setVendorDesc(_editingVendorKey, desc);
       document.querySelectorAll('.vendor-desc-modal').forEach(d => d.remove());
-      renderBudget();
+      const key = _editingVendorKey;
+      const txId = _editingVendorTxId;
+      const similar = budgetTransactions.filter(t => (t.vendor || vendorName(t.narrative)) === key);
+      const applyAll = () => { setVendorDesc(key, desc); renderBudget(); };
+      const applyOne = () => {
+        if (txId == null) { applyAll(); return; }
+        if (desc) { _txIdDescs[String(txId)] = desc; } else { delete _txIdDescs[String(txId)]; }
+        localStorage.setItem('budget_txid_descs', JSON.stringify(_txIdDescs));
+        renderBudget();
+      };
+      if (similar.length > 1 && txId != null) {
+        showScopeModal(
+          'Label transaction',
+          `${similar.length} transactions share this vendor.`,
+          'Just this transaction',
+          `All ${similar.length} similar transactions`,
+          applyOne, applyAll
+        );
+      } else {
+        applyAll();
+      }
     }
 
     function showRenameCategoryModal(cat) {
