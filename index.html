@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.84</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.85</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -625,19 +625,34 @@
       const currentCat = effectiveCat(budgetTransactions.find(t => t.narrative === narrative) || { narrative, category: '' });
       const dropdown = document.createElement('div');
       dropdown.className = 'cat-dropdown';
-      dropdown.style.cssText = 'position:fixed;z-index:9999;background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.35);padding:4px;max-height:280px;overflow-y:auto;width:170px;font-family:inherit;';
-      Object.entries(CAT_COLORS).sort(([a], [b]) => a === 'Uncategorised' ? 1 : b === 'Uncategorised' ? -1 : a.localeCompare(b)).forEach(([cat, color]) => {
+      dropdown.style.cssText = 'position:fixed;z-index:9999;background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.35);padding:4px;max-height:340px;overflow-y:auto;width:200px;font-family:inherit;';
+      const subcats = getSubcatParents();
+      const addItem = (cat, color, indent) => {
         const item = document.createElement('div');
-        item.style.cssText = `padding:6px 10px;cursor:pointer;border-radius:4px;font-size:12px;color:${color};font-weight:${cat === currentCat ? '700' : '400'};display:flex;align-items:center;gap:6px`;
-        item.innerHTML = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>${cat}${cat === currentCat ? ' ✓' : ''}`;
+        const isCur = cat === currentCat;
+        item.style.cssText = `padding:${indent ? '4px 10px 4px 26px' : '6px 10px'};cursor:pointer;border-radius:4px;font-size:12px;display:flex;align-items:center;gap:6px;font-weight:${isCur ? '700' : '400'}`;
+        item.innerHTML = `${indent ? '<span style="font-size:10px;color:var(--text-muted);flex-shrink:0">↳</span>' : ''}<span style="display:inline-block;width:${indent?7:8}px;height:${indent?7:8}px;border-radius:50%;background:${color};flex-shrink:0"></span><span style="color:${color}">${cat}${isCur ? ' ✓' : ''}</span>`;
         item.onmouseenter = () => item.style.background = 'var(--bg-secondary)';
         item.onmouseleave = () => item.style.background = '';
-        item.onclick = (e) => { e.stopPropagation(); setCatOverride(narrative, cat); dropdown.remove(); };
+        item.onclick = e => { e.stopPropagation(); setCatOverride(narrative, cat); dropdown.remove(); };
         dropdown.appendChild(item);
-      });
+      };
+      // Top-level cats (not sub-cats) sorted A-Z, with their children below
+      Object.entries(CAT_COLORS)
+        .filter(([c]) => c !== 'Uncategorised' && !subcats[c])
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([cat, color]) => {
+          addItem(cat, color, false);
+          childrenOf(cat).forEach(child => addItem(child, CAT_COLORS[child] || color, true));
+        });
+      // Separator + Uncategorised
+      const sep = document.createElement('div');
+      sep.style.cssText = 'height:1px;background:var(--border-light);margin:4px 0';
+      dropdown.appendChild(sep);
+      addItem('Uncategorised', CAT_COLORS['Uncategorised'], false);
       const rect = el.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
-      dropdown.style.left = Math.min(rect.left, window.innerWidth - 180) + 'px';
+      dropdown.style.left = Math.min(rect.left, window.innerWidth - 210) + 'px';
       dropdown.style.top = spaceBelow > 200 ? (rect.bottom + 4) + 'px' : (rect.top - 4) + 'px';
       if (spaceBelow <= 200) dropdown.style.transform = 'translateY(-100%)';
       document.body.appendChild(dropdown);
@@ -790,6 +805,9 @@
     })();
 
     function catColor(cat) { return CAT_COLORS[cat] || '#9ca3af'; }
+    function getSubcatParents() { try { return JSON.parse(localStorage.getItem('budget_subcat_parents') || '{}'); } catch { return {}; } }
+    function parentOf(cat) { return getSubcatParents()[cat] || null; }
+    function childrenOf(parent) { const p = getSubcatParents(); return Object.entries(p).filter(([,v]) => v === parent).map(([k]) => k).sort(); }
     let budgetSelectedYear = null;
     let budgetSelectedMonth = null;
     let budgetSelectedCategory = null;
@@ -845,16 +863,28 @@
       document.querySelectorAll('.bulk-cat-picker').forEach(d => d.remove());
       const picker = document.createElement('div');
       picker.className = 'bulk-cat-picker';
-      picker.style.cssText = 'position:fixed;z-index:10000;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.25);max-height:320px;overflow-y:auto;min-width:190px;font-family:inherit;padding:4px';
-      Object.entries(CAT_COLORS).sort(([a], [b]) => a === 'Uncategorised' ? 1 : b === 'Uncategorised' ? -1 : a.localeCompare(b)).forEach(([cat, color]) => {
+      picker.style.cssText = 'position:fixed;z-index:10000;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.25);max-height:340px;overflow-y:auto;min-width:200px;font-family:inherit;padding:4px';
+      const subcats = getSubcatParents();
+      const addItem = (cat, color, indent) => {
         const item = document.createElement('div');
-        item.style.cssText = `padding:7px 12px;cursor:pointer;border-radius:6px;font-size:12px;display:flex;align-items:center;gap:8px`;
-        item.innerHTML = `<span style="width:9px;height:9px;border-radius:50%;background:${color};flex-shrink:0"></span><span style="color:var(--text-primary)">${cat}</span>`;
+        item.style.cssText = `padding:${indent ? '4px 10px 4px 26px' : '6px 10px'};cursor:pointer;border-radius:4px;font-size:12px;display:flex;align-items:center;gap:6px`;
+        item.innerHTML = `${indent ? '<span style="font-size:10px;color:var(--text-muted);flex-shrink:0">↳</span>' : ''}<span style="display:inline-block;width:${indent?7:8}px;height:${indent?7:8}px;border-radius:50%;background:${color};flex-shrink:0"></span><span style="color:var(--text-primary)">${cat}</span>`;
         item.onmouseenter = () => item.style.background = 'var(--bg-secondary)';
         item.onmouseleave = () => item.style.background = '';
         item.onclick = e => { e.stopPropagation(); applyBulkCategory(cat); picker.remove(); };
         picker.appendChild(item);
-      });
+      };
+      Object.entries(CAT_COLORS)
+        .filter(([c]) => c !== 'Uncategorised' && !subcats[c])
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([cat, color]) => {
+          addItem(cat, color, false);
+          childrenOf(cat).forEach(child => addItem(child, CAT_COLORS[child] || color, true));
+        });
+      const sep = document.createElement('div');
+      sep.style.cssText = 'height:1px;background:var(--border-light);margin:4px 0';
+      picker.appendChild(sep);
+      addItem('Uncategorised', CAT_COLORS['Uncategorised'] || '#9ca3af', false);
       const rect = btn.getBoundingClientRect();
       picker.style.left = rect.left + 'px';
       picker.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
@@ -2049,16 +2079,12 @@
         `<div class="budget-panel-box">${recurring.length ? recurHeader + recurRows : noData()}</div>`,
         `<span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:8px">detected from all-time data</span>`);
 
-      // Categories tab: full grid of ALL defined categories, then drill-down
+      // Categories tab: hierarchical grid (top-level + sub-cats grouped)
       const catSpendMap = Object.fromEntries(catSpending(txs, true));
       const catAvgMap = avgMonthlyCatSpending(true);
-      const allDefinedCats = Object.keys(CAT_COLORS).filter(c => c !== 'Uncategorised' && c !== 'Other').sort((a, b) => {
-        const aEx = EXCLUDED_CATS.has(a), bEx = EXCLUDED_CATS.has(b);
-        if (aEx !== bEx) return aEx ? 1 : -1;
-        return a.localeCompare(b);
-      });
-      const uncatAmt = catSpendMap['Uncategorised'] || 0;
-      const catCards = allDefinedCats.map(cat => {
+      const _sp = getSubcatParents();
+      // Helper: render a single cat card
+      const makeCatCard = (cat, isSubcat) => {
         const amt = catSpendMap[cat] || 0;
         const avg = catAvgMap[cat] || 0;
         const color = catColor(cat);
@@ -2066,18 +2092,39 @@
         const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const txCount = txs.filter(t => effectiveCat(t) === cat).length;
         const excluded = EXCLUDED_CATS.has(cat);
-        return `<div onclick="selectCategory('${esc}')" style="cursor:pointer;padding:14px 16px;border-radius:10px;border:2px solid ${isSelected ? color : 'var(--border)'};background:${isSelected ? 'var(--bg-secondary)' : 'var(--bg-primary)'};display:flex;flex-direction:column;gap:6px;transition:border-color .15s${excluded ? ';opacity:.55' : ''}">
+        return `<div onclick="selectCategory('${esc}')" style="cursor:pointer;padding:${isSubcat?'10px 12px':'14px 16px'};border-radius:10px;border:2px solid ${isSelected ? color : 'var(--border)'};background:${isSelected ? 'var(--bg-secondary)' : 'var(--bg-primary)'};display:flex;flex-direction:column;gap:6px;transition:border-color .15s${excluded ? ';opacity:.55' : ''}${isSubcat ? ';border-style:dashed' : ''}">
           <div style="display:flex;align-items:center;gap:8px">
-            <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
+            ${isSubcat ? '<span style="font-size:10px;color:var(--text-muted);flex-shrink:0">↳</span>' : ''}
+            <span style="width:${isSubcat?8:10}px;height:${isSubcat?8:10}px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
             <span style="font-size:12px;font-weight:600;color:var(--text-primary);flex:1">${cat}</span>
-            <button onclick="event.stopPropagation();showRenameCategoryModal('${esc}')" style="background:none;border:none;padding:0;cursor:pointer;font-size:12px;color:var(--text-muted);line-height:1" title="Rename category">✏</button>
-            <button onclick="event.stopPropagation();toggleExcludedCat('${esc}')" style="background:none;border:none;padding:0;cursor:pointer;font-size:13px;color:${excluded ? '#ef4444' : 'var(--text-muted)'};line-height:1" title="${excluded ? 'Marked as unaccounted — click to include' : 'Mark as unaccounted'}">⊘</button>
+            <button onclick="event.stopPropagation();showRenameCategoryModal('${esc}')" style="background:none;border:none;padding:0;cursor:pointer;font-size:12px;color:var(--text-muted);line-height:1" title="Rename">✏</button>
+            <button onclick="event.stopPropagation();toggleExcludedCat('${esc}')" style="background:none;border:none;padding:0;cursor:pointer;font-size:13px;color:${excluded ? '#ef4444' : 'var(--text-muted)'};line-height:1" title="${excluded ? 'Included — click to exclude' : 'Mark as unaccounted'}">⊘</button>
           </div>
-          <div style="font-size:18px;font-weight:700;color:${amt > 0 ? color : 'var(--text-muted)'}">${amt > 0 ? fmtAUD(amt) : '—'}</div>
+          <div style="font-size:${isSubcat?'15':'18'}px;font-weight:700;color:${amt > 0 ? color : 'var(--text-muted)'}">${amt > 0 ? fmtAUD(amt) : '—'}</div>
           ${avg > 0 ? `<div style="font-size:11px;color:var(--text-muted)">avg ${fmtAUD(avg)}/mo</div>` : ''}
-          <div style="font-size:11px;color:${excluded ? '#ef4444' : 'var(--text-muted)'}">${excluded ? 'unaccounted (hidden from Overview)' : txCount > 0 ? txCount + ' transaction' + (txCount > 1 ? 's' : '') : 'no transactions'}</div>
+          <div style="font-size:11px;color:${excluded ? '#ef4444' : 'var(--text-muted)'}">${excluded ? 'unaccounted' : txCount > 0 ? txCount + ' tx' : 'no transactions'}</div>
         </div>`;
-      }).join('');
+      };
+      // Top-level cats (not sub-cats), sorted
+      const topLevelCats = Object.keys(CAT_COLORS).filter(c => c !== 'Uncategorised' && c !== 'Other' && !_sp[c]).sort((a, b) => {
+        const aEx = EXCLUDED_CATS.has(a), bEx = EXCLUDED_CATS.has(b);
+        if (aEx !== bEx) return aEx ? 1 : -1;
+        return a.localeCompare(b);
+      });
+      // Build the grid: for each top-level cat, show its card then any sub-cats, then an "add sub-cat" button
+      let catGridInner = '';
+      topLevelCats.forEach(cat => {
+        const children = childrenOf(cat);
+        const escCat = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        catGridInner += makeCatCard(cat, false);
+        children.forEach(child => { catGridInner += makeCatCard(child, true); });
+        // Add sub-category button for this parent
+        catGridInner += `<div onclick="showAddCategoryModal('${escCat}')" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:2px dashed var(--border);background:var(--bg-primary);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;transition:border-color .15s;min-height:80px" onmouseenter="this.style.borderColor='${catColor(cat)}'" onmouseleave="this.style.borderColor='var(--border)'">
+          <div style="font-size:16px;color:var(--text-muted);line-height:1">+</div>
+          <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-align:center">Sub-category</div>
+        </div>`;
+      });
+      const uncatAmt = catSpendMap['Uncategorised'] || 0;
       const uncatEsc = 'Uncategorised';
       const uncatCount = txs.filter(t => effectiveCat(t) === 'Uncategorised').length;
       const uncatCard = `<div onclick="selectCategory('${uncatEsc}')" style="cursor:pointer;padding:14px 16px;border-radius:10px;border:2px solid ${budgetSelectedCategory==='Uncategorised'?'#d1d5db':'var(--border)'};background:${budgetSelectedCategory==='Uncategorised'?'var(--bg-secondary)':'var(--bg-primary)'};display:flex;flex-direction:column;gap:6px">
@@ -2092,7 +2139,7 @@
         <div style="font-size:24px;color:var(--text-muted);line-height:1">+</div>
         <div style="font-size:12px;font-weight:600;color:var(--text-muted)">New category</div>
       </div>`;
-      const catGrid = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px">${catCards}${uncatCard}${addCatCard}</div>`;
+      const catGrid = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px">${catGridInner}${uncatCard}${addCatCard}</div>`;
 
       // Top spending categories panel for the Categories tab
       const topSpendCats = catSpending(txs).filter(([, amt]) => amt > 0).slice(0, 10);
@@ -2575,7 +2622,7 @@
       'budget_custom_cats', 'budget_cat_renames', 'budget_manual_cats',
       'budget_limits', 'budget_excluded_cats', 'budget_excluded_accounts',
       'budget_merchant_cats', 'budget_vendor_descs', 'budget_collapsed',
-      'budget_overview_order', 'budget_brand_norms'
+      'budget_overview_order', 'budget_brand_norms', 'budget_subcat_parents'
     ];
 
     async function exportAllData() {
@@ -2812,13 +2859,20 @@
       else if (val.trim() === '') { delete budgetLimits[cat]; saveBudgetLimits(); renderBudget(); }
     }
 
-    function showAddCategoryModal() {
+    function showAddCategoryModal(defaultParent = '') {
       document.querySelectorAll('.add-cat-modal').forEach(d => d.remove());
       const usedColors = new Set(Object.values(CAT_COLORS));
       const defaultColor = CUSTOM_CAT_PALETTE.find(c => !usedColors.has(c)) || CUSTOM_CAT_PALETTE[0];
       const swatches = CUSTOM_CAT_PALETTE.map(c =>
         `<span data-color="${c}" class="cswatch" onclick="document.querySelectorAll('.cswatch').forEach(s=>s.style.outline='none');this.style.outline='2px solid '+getComputedStyle(document.documentElement).getPropertyValue('--text-primary');document.getElementById('catColorPick').value='${c}'" style="display:inline-block;width:22px;height:22px;border-radius:50%;background:${c};cursor:pointer;flex-shrink:0;${c===defaultColor?'outline:2px solid #141413':''}"></span>`
       ).join('');
+      // Build parent options: all non-sub-cat categories
+      const subcatParents = getSubcatParents();
+      const parentOptions = Object.keys(CAT_COLORS)
+        .filter(c => c !== 'Uncategorised' && c !== 'Other' && !subcatParents[c])
+        .sort()
+        .map(c => `<option value="${c.replace(/"/g, '&quot;')}"${c === defaultParent ? ' selected' : ''}>${c}</option>`)
+        .join('');
       const overlay = document.createElement('div');
       overlay.className = 'add-cat-modal';
       overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center';
@@ -2827,6 +2881,13 @@
         <div style="margin-bottom:14px">
           <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:6px">Name</label>
           <input id="catNameInput" type="text" placeholder="e.g. Hobbies" style="width:100%;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;color:var(--text-primary);font-family:inherit;outline:none;box-sizing:border-box">
+        </div>
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:6px">Sub-category of</label>
+          <select id="catParentSelect" style="width:100%;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;color:var(--text-primary);font-family:inherit;outline:none;box-sizing:border-box">
+            <option value="">— None (top-level category) —</option>
+            ${parentOptions}
+          </select>
         </div>
         <div style="margin-bottom:20px">
           <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:8px">Colour</label>
@@ -2852,12 +2913,18 @@
       if (!name) { document.getElementById('catNameInput')?.focus(); return; }
       if (CAT_COLORS[name]) { showStatus(`"${name}" already exists`); return; }
       const color = document.getElementById('catColorPick')?.value || CUSTOM_CAT_PALETTE[0];
+      const parent = (document.getElementById('catParentSelect')?.value || '').trim();
       document.querySelectorAll('.add-cat-modal').forEach(d => d.remove());
       const custom = getCustomCats();
       custom[name] = color;
       localStorage.setItem('budget_custom_cats', JSON.stringify(custom));
       CAT_COLORS[name] = color;
-      showStatus(`Category "${name}" added`);
+      if (parent) {
+        const sp = getSubcatParents();
+        sp[name] = parent;
+        localStorage.setItem('budget_subcat_parents', JSON.stringify(sp));
+      }
+      showStatus(`${parent ? `Sub-category "${name}" added under "${parent}"` : `Category "${name}" added`}`);
       renderBudget();
     }
 
@@ -2990,6 +3057,12 @@
       }
       // Update selected category if needed
       if (budgetSelectedCategory === oldName) budgetSelectedCategory = newName;
+      // Update sub-category parent references
+      const sp = getSubcatParents();
+      let spChanged = false;
+      if (sp[oldName] !== undefined) { sp[newName] = sp[oldName]; delete sp[oldName]; spChanged = true; }
+      for (const [k, v] of Object.entries(sp)) { if (v === oldName) { sp[k] = newName; spChanged = true; } }
+      if (spChanged) localStorage.setItem('budget_subcat_parents', JSON.stringify(sp));
       invalidateCatCache();
       showStatus(`Renamed "${oldName}" → "${newName}"`);
       renderBudget();
