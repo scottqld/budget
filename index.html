@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.93</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.94</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -2101,14 +2101,18 @@
       const catSpendMap = Object.fromEntries(catSpending(txs, true));
       const catAvgMap = avgMonthlyCatSpending(true);
       const _sp = getSubcatParents();
+      // Precompute tx counts per category
+      const txCountMap = {};
+      txs.forEach(t => { const c = effectiveCat(t); txCountMap[c] = (txCountMap[c] || 0) + 1; });
 
-      const makeCatRow = (cat, isSubcat) => {
-        const amt = catSpendMap[cat] || 0;
-        const avg = catAvgMap[cat] || 0;
+      const makeCatRow = (cat, isSubcat, opts = {}) => {
+        const ownTxCount = txCountMap[cat] || 0;
+        const amt = opts.amt !== undefined ? opts.amt : (catSpendMap[cat] || 0);
+        const avg = opts.avg !== undefined ? opts.avg : (catAvgMap[cat] || 0);
+        const txCount = opts.txCount !== undefined ? opts.txCount : ownTxCount;
         const color = catColor(cat);
         const isSelected = budgetSelectedCategory === cat;
         const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        const txCount = txs.filter(t => effectiveCat(t) === cat).length;
         const excluded = EXCLUDED_CATS.has(cat);
         const selBg = isSelected ? 'var(--bg-secondary)' : 'transparent';
         return `<div onclick="selectCategory('${esc}')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:${isSubcat?'4px 10px 4px 28px':'7px 10px'};border-radius:6px;background:${selBg};${excluded?'opacity:.55;':''}transition:background .1s" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background='${isSelected?'var(--bg-secondary)':'transparent'}'">
@@ -2120,7 +2124,7 @@
           <button onclick="event.stopPropagation();openParentPicker('${esc}',this)" style="background:none;border:none;padding:2px 4px;cursor:pointer;font-size:12px;color:var(--text-muted);line-height:1;flex-shrink:0" title="Move / change parent">⤵</button>
           <button onclick="event.stopPropagation();showRenameCategoryModal('${esc}')" style="background:none;border:none;padding:2px 4px;cursor:pointer;font-size:11px;color:var(--text-muted);line-height:1;flex-shrink:0" title="Rename">✏</button>
           <button onclick="event.stopPropagation();toggleExcludedCat('${esc}')" style="background:none;border:none;padding:2px 4px;cursor:pointer;font-size:12px;color:${excluded?'#ef4444':'var(--text-muted)'};line-height:1;flex-shrink:0" title="${excluded?'Unaccounted':'Mark unaccounted'}">⊘</button>
-          ${txCount===0&&childrenOf(cat).length===0?`<button onclick="event.stopPropagation();deleteCat('${esc}')" style="background:none;border:none;padding:2px 4px;cursor:pointer;font-size:12px;color:#ef4444;line-height:1;flex-shrink:0" title="Delete empty category">🗑</button>`:''}
+          ${ownTxCount===0&&childrenOf(cat).length===0?`<button onclick="event.stopPropagation();deleteCat('${esc}')" style="background:none;border:none;padding:2px 4px;cursor:pointer;font-size:12px;color:#ef4444;line-height:1;flex-shrink:0" title="Delete empty category">🗑</button>`:''}
         </div>`;
       };
 
@@ -2134,12 +2138,21 @@
         const children = childrenOf(cat);
         const color = catColor(cat);
         const escCat = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        // Roll sub-category totals into parent display values
+        const childAmt = children.reduce((s, c) => s + (catSpendMap[c] || 0), 0);
+        const childAvg = children.reduce((s, c) => s + (catAvgMap[c] || 0), 0);
+        const childTxCount = children.reduce((s, c) => s + (txCountMap[c] || 0), 0);
+        const parentOpts = children.length > 0 ? {
+          amt: (catSpendMap[cat] || 0) + childAmt,
+          avg: (catAvgMap[cat] || 0) + childAvg,
+          txCount: (txCountMap[cat] || 0) + childTxCount
+        } : {};
         const childRows = children.map(c => makeCatRow(c, true)).join('');
         const addSubLink = `<div onclick="showAddCategoryModal('${escCat}')" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:3px 10px 4px 28px;border-radius:6px;transition:background .1s" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background='transparent'">
           <span style="font-size:11px;color:var(--text-muted)">+ Add sub-category</span>
         </div>`;
         return `<div style="background:var(--bg-card);border:1px solid var(--border);border-left:4px solid ${color};border-radius:10px;padding:4px">
-          ${makeCatRow(cat, false)}${childRows}${addSubLink}
+          ${makeCatRow(cat, false, parentOpts)}${childRows}${addSubLink}
         </div>`;
       }).join('');
 
