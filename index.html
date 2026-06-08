@@ -202,8 +202,9 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.8</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v3.0</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
+      <span id="latestTxChip" style="display:none;font-size:11px;padding:4px 10px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;white-space:nowrap"></span>
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
       <button id="changeFolderBtn" style="display:none;font-size:12px;padding:6px 12px">Change folder</button>
@@ -1065,6 +1066,21 @@
       setTimeout(() => statusEl.classList.remove('visible'), 3000);
     }
 
+    function updateLatestDateChip() {
+      const chip = document.getElementById('latestTxChip');
+      if (!chip) return;
+      if (!budgetTransactions.length) { chip.style.display = 'none'; return; }
+      const latest = budgetTransactions.reduce((max, t) => {
+        const d = t.date instanceof Date ? t.date : new Date(t.date);
+        return isFinite(d) && d > max ? d : max;
+      }, new Date(0));
+      if (!isFinite(latest) || latest.getFullYear() < 2000) { chip.style.display = 'none'; return; }
+      const fmtDate = d => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+      const nextDay = new Date(latest); nextDay.setDate(nextDay.getDate() + 1);
+      chip.style.display = 'inline-flex';
+      chip.innerHTML = `<span style="color:var(--text-muted)">Latest tx: </span><strong style="color:var(--text-primary);margin:0 4px">${fmtDate(latest)}</strong><span style="color:var(--text-muted)"> · extract from </span><strong style="color:var(--accent);margin-left:4px">${nextDay.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}</strong>`;
+    }
+
     function saveBudgetLimits() {
       localStorage.setItem('budget_limits', JSON.stringify(budgetLimits));
     }
@@ -1130,7 +1146,8 @@
         existingKeys.add(k);
         return true;
       });
-      if (!unique.length) return 0;
+      const skipped = txs.length - unique.length;
+      if (!unique.length) return { added: 0, skipped };
       const db = await openDB();
       await new Promise((res, rej) => {
         const tx = db.transaction(['transactions', 'imported_files'], 'readwrite');
@@ -1138,7 +1155,7 @@
         tx.objectStore('imported_files').put({ filename, importedAt: new Date(), count: unique.length }, filename);
         tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
       });
-      return unique.length;
+      return { added: unique.length, skipped };
     }
 
     async function loadAllTransactions() {
@@ -1235,11 +1252,11 @@
         return;
       }
       const existingKeys = new Set((await loadAllTransactions()).map(txDedupKey));
-      let totalNew = 0;
+      let totalNew = 0, totalSkipped = 0;
       for (const f of newFiles) {
         const text = await f.text();
         const txs = parseCSV(text);
-        if (txs.length) totalNew += await storeTransactions(txs, f.name, existingKeys);
+        if (txs.length) { const r = await storeTransactions(txs, f.name, existingKeys); totalNew += r.added; totalSkipped += r.skipped; }
       }
       budgetTransactions = (await loadAllTransactions()).filter(t => !EXCLUDED_ACCOUNTS.has(t.account));
       const years = [...new Set(budgetTransactions.map(t => t.month.split('-')[0]))].sort();
@@ -1247,7 +1264,8 @@
         budgetSelectedYear = years[years.length - 1] || null;
         budgetSelectedMonth = null;
       }
-      showStatus(`Imported ${totalNew} new transaction${totalNew > 1 ? 's' : ''} from ${newFiles.length} file${newFiles.length > 1 ? 's' : ''}`);
+      const dupNote = totalSkipped > 0 ? ` · ${totalSkipped} duplicate${totalSkipped !== 1 ? 's' : ''} skipped` : '';
+      showStatus(`Imported ${totalNew} new transaction${totalNew !== 1 ? 's' : ''}${dupNote}`);
       renderBudget();
     }
 
@@ -1269,11 +1287,11 @@
       }
 
       const existingKeys = new Set((await loadAllTransactions()).map(txDedupKey));
-      let totalNew = 0;
+      let totalNew = 0, totalSkipped = 0;
       for (const f of newFiles) {
         const text = await (await f.handle.getFile()).text();
         const txs = parseCSV(text);
-        if (txs.length) totalNew += await storeTransactions(txs, f.name, existingKeys);
+        if (txs.length) { const r = await storeTransactions(txs, f.name, existingKeys); totalNew += r.added; totalSkipped += r.skipped; }
       }
 
       budgetTransactions = (await loadAllTransactions()).filter(t => !EXCLUDED_ACCOUNTS.has(t.account));
@@ -1286,7 +1304,8 @@
         budgetSelectedYear = years[years.length - 1] || null;
         budgetSelectedMonth = null;
       }
-      showStatus(`Imported ${totalNew} new transaction${totalNew > 1 ? 's' : ''} from ${newFiles.length} file${newFiles.length > 1 ? 's' : ''}`);
+      const dupNote = totalSkipped > 0 ? ` · ${totalSkipped} duplicate${totalSkipped !== 1 ? 's' : ''} skipped` : '';
+      showStatus(`Imported ${totalNew} new transaction${totalNew !== 1 ? 's' : ''}${dupNote}`);
       renderBudget();
     }
 
@@ -1737,6 +1756,7 @@
       document.getElementById('emptyState').style.display = 'none';
       document.getElementById('mainContent').style.display = '';
       document.getElementById('stickyBar').style.display = '';
+      updateLatestDateChip();
 
       const txs = filtered();
       const months = allMonths();
@@ -2478,32 +2498,58 @@
           if (_cbLast3Months.includes(t.month)) _cbCatSpend[_cbc] = (_cbCatSpend[_cbc] || 0) + t.debit;
           if (t.month === _latestMonth) _cbPrevSpend[_cbc] = (_cbPrevSpend[_cbc] || 0) + t.debit;
         });
-        const _cbPrevRolled = rollToParents(_cbPrevSpend);
-        const _cbAvgs = Object.entries(rollToParents(_cbCatSpend)).map(([cat, total]) => [cat, total / _cbN]).filter(([, a]) => a > 0).sort((a, b) => b[1] - a[1]);
-        const _cbTotalAvg = _cbAvgs.reduce((s, [, a]) => s + a, 0);
+        // Keep sub-cats separate (don't roll up) so each can be individually fixed
+        const _cbSP = getSubcatParents();
+        const _cbAvgMap = Object.fromEntries(Object.entries(_cbCatSpend).map(([c, v]) => [c, v / _cbN]));
+        // Build groups: top-level cats with their sub-cats
+        const _cbTopCats = Object.keys(_cbAvgMap).filter(c => !_cbSP[c]);
+        const _cbGroups = _cbTopCats.map(cat => {
+          const ownAvg = _cbAvgMap[cat] || 0;
+          const subs = childrenOf(cat).filter(c => _cbAvgMap[c] > 0);
+          const totalAvg = ownAvg + subs.reduce((s, c) => s + (_cbAvgMap[c] || 0), 0);
+          return { cat, ownAvg, subs, totalAvg };
+        }).filter(g => g.totalAvg > 0).sort((a, b) => b.totalAvg - a.totalAvg);
+        const _cbTotalAvg = _cbGroups.reduce((s, g) => s + g.totalAvg, 0);
         const _cbGoal = getMonthlyGoal();
         const _cbGap = _cbTotalAvg - _cbGoal;
-        let cutbackPanel = '';
-        if (_cbAvgs.length > 0 && _cbGap > 0) {
-          const cbRows = _cbAvgs.map(([cat, avg]) => {
-            const isFixed = _cutbackFixed.has(cat);
-            const target = avg; // start at current spend — user drags or uses Auto-distribute
-            const savings = 0;
-            const color = catColor(cat);
-            const prevAmt = _cbPrevRolled[cat] || 0;
-            return `<div class="cb-row" data-cat="${cat.replace(/"/g, '&quot;')}" data-avg="${avg.toFixed(2)}" style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-light)">
-              <div style="flex:1;display:flex;align-items:center;gap:6px;min-width:0">
-                <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
-                <span style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cat}</span>
-                <span style="font-size:11px;color:var(--text-muted);flex-shrink:0">${fmtAUD(avg)}</span>
-              </div>
-              <input type="range" class="cb-slider" min="0" max="${Math.ceil(avg)}" step="1" value="${target}" ${isFixed ? 'disabled' : ''} oninput="updateCutbackPlan()" style="width:100px;flex-shrink:0;accent-color:${color}">
-              <span class="cb-target" style="font-size:12px;font-weight:600;flex:0 0 72px;color:var(--text-primary)">${fmtAUD(target)}</span>
-              <span class="cb-prev" style="font-size:11px;flex:0 0 72px;color:${prevAmt > avg ? 'var(--accent)' : prevAmt < avg * 0.9 ? '#16a34a' : 'var(--text-muted)'}">${prevAmt > 0 ? fmtAUD(prevAmt) : '—'}</span>
-              <span class="cb-save" style="font-size:11px;color:var(--accent);flex:0 0 80px;text-align:right">${savings > 0.5 ? '−'+fmtAUD(savings) : '—'}</span>
-              <button class="cb-fixed-btn" onclick="toggleCutbackFixed(this.closest('.cb-row').dataset.cat)" style="font-size:10px;padding:2px 8px;border:1px solid ${isFixed ? 'var(--accent)' : 'var(--border)'};border-radius:4px;background:${isFixed ? 'var(--accent)' : 'var(--bg-secondary)'};color:${isFixed ? '#fff' : 'var(--text-muted)'};cursor:pointer;flex-shrink:0">Fixed</button>
-            </div>`;
-          }).join('');
+        const mkCbRow = (cat, avg, indent) => {
+          const isFixed = _cutbackFixed.has(cat);
+          const color = catColor(cat);
+          const prevAmt = _cbPrevSpend[cat] || 0;
+          const prevColor = prevAmt > avg ? 'var(--accent)' : prevAmt > 0 && prevAmt < avg * 0.9 ? '#16a34a' : 'var(--text-muted)';
+          const indentStyle = indent ? 'padding-left:18px;' : '';
+          const dot = indent
+            ? `<span style="font-size:10px;color:var(--text-muted);flex-shrink:0">↳</span><span style="width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>`
+            : `<span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>`;
+          return `<div class="cb-row" data-cat="${cat.replace(/"/g, '&quot;')}" data-avg="${avg.toFixed(2)}" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-light);${indentStyle}">
+            <div style="flex:1;display:flex;align-items:center;gap:5px;min-width:0">
+              ${dot}
+              <span style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cat}</span>
+              <span style="font-size:11px;color:var(--text-muted);flex-shrink:0">${fmtAUD(avg)}</span>
+            </div>
+            <input type="range" class="cb-slider" min="0" max="${Math.ceil(avg)}" step="1" value="${avg}" ${isFixed ? 'disabled' : ''} oninput="updateCutbackPlan()" style="width:100px;flex-shrink:0;accent-color:${color}">
+            <span class="cb-target" style="font-size:12px;font-weight:600;flex:0 0 72px;color:var(--text-primary)">${fmtAUD(avg)}</span>
+            <span class="cb-prev" style="font-size:11px;flex:0 0 72px;color:${prevColor}">${prevAmt > 0 ? fmtAUD(prevAmt) : '—'}</span>
+            <span class="cb-save" style="font-size:11px;color:var(--accent);flex:0 0 80px;text-align:right">—</span>
+            <button class="cb-fixed-btn" onclick="toggleCutbackFixed(this.closest('.cb-row').dataset.cat)" style="font-size:10px;padding:2px 8px;border:1px solid ${isFixed ? 'var(--accent)' : 'var(--border)'};border-radius:4px;background:${isFixed ? 'var(--accent)' : 'var(--bg-secondary)'};color:${isFixed ? '#fff' : 'var(--text-muted)'};cursor:pointer;flex-shrink:0">Fixed</button>
+          </div>`;
+        };
+        const cbRows = _cbGroups.map(({ cat, ownAvg, subs, totalAvg }) => {
+          if (subs.length === 0) return mkCbRow(cat, ownAvg, false);
+          // Parent header (no slider) + sub-cat rows
+          const color = catColor(cat);
+          const prevTotal = (ownAvg > 0 ? (_cbPrevSpend[cat] || 0) : 0) + subs.reduce((s, c) => s + (_cbPrevSpend[c] || 0), 0);
+          const header = `<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:1px solid var(--border-light);background:var(--bg-secondary);margin:0 -16px;padding-left:16px;padding-right:16px">
+            <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
+            <span style="font-size:12px;font-weight:700;color:var(--text-primary);flex:1">${cat}</span>
+            <span style="font-size:11px;color:var(--text-muted);flex:0 0 72px;text-align:right">avg ${fmtAUD(totalAvg)}</span>
+            <span style="font-size:11px;color:var(--text-muted);flex:0 0 72px;text-align:right">${prevTotal > 0 ? fmtAUD(prevTotal) : '—'}</span>
+            <span style="flex:0 0 80px"></span><span style="width:46px;flex-shrink:0"></span>
+          </div>`;
+          const subRows = subs.map(c => mkCbRow(c, _cbAvgMap[c], true)).join('');
+          const ownRow = ownAvg > 0 ? mkCbRow(cat + ' (other)', ownAvg, true) : '';
+          return header + subRows + ownRow;
+        }).join('');
           cutbackPanel = `<div style="margin-bottom:16px">
             <div class="budget-section-title" style="margin-bottom:10px">Cutback Planner
               <span style="font-size:12px;font-weight:400;color:var(--text-muted);margin-left:6px">3-month avg · drag sliders to plan cuts</span>
