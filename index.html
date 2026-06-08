@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.85</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.86</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -808,6 +808,24 @@
     function getSubcatParents() { try { return JSON.parse(localStorage.getItem('budget_subcat_parents') || '{}'); } catch { return {}; } }
     function parentOf(cat) { return getSubcatParents()[cat] || null; }
     function childrenOf(parent) { const p = getSubcatParents(); return Object.entries(p).filter(([,v]) => v === parent).map(([k]) => k).sort(); }
+
+    // Auto-wire known hierarchies for any existing categories not yet mapped
+    (function initSubcatDefaults() {
+      const sp = getSubcatParents();
+      const cats = new Set(Object.keys(CAT_COLORS));
+      let changed = false;
+      const wire = (child, parent) => {
+        if (cats.has(child) && cats.has(parent) && !sp[child]) { sp[child] = parent; changed = true; }
+      };
+      // Shopping children
+      wire('Scott', 'Shopping');
+      wire('Sally', 'Shopping');
+      // Any category containing "Insurance" (case-insensitive) that isn't the parent itself
+      if (cats.has('Insurance')) {
+        cats.forEach(c => { if (c !== 'Insurance' && /insurance/i.test(c) && !sp[c]) { sp[c] = 'Insurance'; changed = true; } });
+      }
+      if (changed) localStorage.setItem('budget_subcat_parents', JSON.stringify(sp));
+    })();
     let budgetSelectedYear = null;
     let budgetSelectedMonth = null;
     let budgetSelectedCategory = null;
