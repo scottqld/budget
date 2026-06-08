@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.96</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.97</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -810,6 +810,29 @@
     function childrenOf(parent) { const p = getSubcatParents(); return Object.entries(p).filter(([,v]) => v === parent).map(([k]) => k).sort(); }
     // Returns a Set of the category + all its sub-categories (for inclusive filtering)
     function catGroup(cat) { return new Set([cat, ...childrenOf(cat)]); }
+    // Roll sub-category amounts into their parent in a flat { cat: amount } map
+    function rollToParents(m) {
+      const r = Object.assign({}, m);
+      const sp = getSubcatParents();
+      for (const [child, parent] of Object.entries(sp)) {
+        if (r[child] !== undefined) { r[parent] = (r[parent] || 0) + r[child]; delete r[child]; }
+      }
+      return r;
+    }
+    // Roll sub-cat monthly data { cat: { month: amount } } into parents
+    function rollMonthlyToParents(monthly) {
+      const r = {};
+      for (const [cat, data] of Object.entries(monthly)) r[cat] = Object.assign({}, data);
+      const sp = getSubcatParents();
+      for (const [child, parent] of Object.entries(sp)) {
+        if (r[child]) {
+          if (!r[parent]) r[parent] = {};
+          for (const [m, v] of Object.entries(r[child])) r[parent][m] = (r[parent][m] || 0) + v;
+          delete r[child];
+        }
+      }
+      return r;
+    }
 
     // Auto-wire known hierarchies for any existing categories not yet mapped
     (function initSubcatDefaults() {
@@ -1818,7 +1841,7 @@
       const _bdCatSpend = txList => {
         const m = {};
         txList.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); if (c === 'Uncategorised' || EXCLUDED_CATS.has(c)) return; m[c] = (m[c] || 0) + t.debit; } });
-        return Object.entries(m).sort((a, b) => b[1] - a[1]);
+        return Object.entries(rollToParents(m)).sort((a, b) => b[1] - a[1]);
       };
       let _bdEntries;
       if (_bdTab === 'avgmo') {
@@ -2181,8 +2204,8 @@
         <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:4px">${uncatRow}</div>
       </div>`;
 
-      // Top spending categories panel for the Categories tab
-      const topSpendCats = catSpending(txs).filter(([, amt]) => amt > 0).slice(0, 10);
+      // Top spending categories panel (sub-cats rolled into parents)
+      const topSpendCats = Object.entries(rollToParents(Object.fromEntries(catSpending(txs, false)))).filter(([, amt]) => amt > 0).sort((a, b) => b[1] - a[1]).slice(0, 10);
       const maxTopSpend = topSpendCats[0]?.[1] || 1;
       const topSpendRows = topSpendCats.map(([cat, amt], i) => {
         const color = catColor(cat);
@@ -2309,7 +2332,8 @@
           if (!_clCatData[cat]) _clCatData[cat] = {};
           _clCatData[cat][t.month] = (_clCatData[cat][t.month] || 0) + t.debit;
         });
-        const _clTopCats = Object.entries(_clCatData)
+        const _clRolled = rollMonthlyToParents(_clCatData);
+        const _clTopCats = Object.entries(_clRolled)
           .map(([cat, data]) => [cat, Object.values(data).reduce((s, v) => s + v, 0)])
           .sort((a, b) => b[1] - a[1]).slice(0, 6).map(([cat]) => cat);
         let catLinePanel = '';
@@ -2317,7 +2341,7 @@
           const W = 800, H = 200, padL = 66, padR = 16, padT = 14, padB = 24;
           const cW = W - padL - padR, cH = H - padT - padB;
           const n = _clMonths.length;
-          const maxVal = Math.max(..._clTopCats.flatMap(cat => _clMonths.map(m => _clCatData[cat]?.[m] || 0)), 1);
+          const maxVal = Math.max(..._clTopCats.flatMap(cat => _clMonths.map(m => _clRolled[cat]?.[m] || 0)), 1);
           const tx = i => padL + (n > 1 ? (i / (n - 1)) * cW : cW / 2);
           const ty = v => padT + cH - (v / maxVal) * cH;
           let grid = '';
@@ -2336,7 +2360,7 @@
             xLabels += `<text x="${tx(i).toFixed(1)}" y="${H - 4}" text-anchor="middle" font-size="9" fill="#8c8c8a">${lbl}</text>`;
           });
           const lines = _clTopCats.map(cat => {
-            const pts = _clMonths.map((m, i) => `${tx(i).toFixed(1)},${ty(_clCatData[cat]?.[m] || 0).toFixed(1)}`).join(' ');
+            const pts = _clMonths.map((m, i) => `${tx(i).toFixed(1)},${ty(_clRolled[cat]?.[m] || 0).toFixed(1)}`).join(' ');
             return `<polyline points="${pts}" fill="none" stroke="${catColor(cat)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" opacity="0.9"/>`;
           }).join('');
           const chartSvg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${grid}${lines}${xLabels}</svg>`;
@@ -2389,55 +2413,78 @@
           curMonthCatSpend[cat] = (curMonthCatSpend[cat] || 0) + t.debit;
         });
 
+        // Roll sub-cat year data and current month spend into parents
+        const _bsp = getSubcatParents();
+        for (const [child, parent] of Object.entries(_bsp)) {
+          if (catYearData[child]) {
+            if (!catYearData[parent]) catYearData[parent] = {};
+            for (const [yr, v] of Object.entries(catYearData[child])) catYearData[parent][yr] = (catYearData[parent][yr] || 0) + v;
+          }
+          if (curMonthCatSpend[child]) {
+            curMonthCatSpend[parent] = (curMonthCatSpend[parent] || 0) + curMonthCatSpend[child];
+          }
+        }
+        // Top-level cats only in the main sorted list (sub-cats shown nested)
         const sortedBudgetCats = Object.entries(catYearData)
+          .filter(([cat]) => !_bsp[cat])
           .map(([cat, yd]) => ({ cat, total: Object.values(yd).reduce((s, v) => s + v, 0) }))
           .sort((a, b) => b.total - a.total);
 
         const yearTotalMap = {};
         budgetYears.forEach(yr => {
-          yearTotalMap[yr] = sortedBudgetCats.reduce((s, { cat }) => s + (catYearData[cat][yr] || 0), 0);
+          yearTotalMap[yr] = sortedBudgetCats.reduce((s, { cat }) => s + (catYearData[cat]?.[yr] || 0), 0);
         });
         const grandTotal = sortedBudgetCats.reduce((s, { total }) => s + total, 0);
-        const curMonthTotal = Object.values(curMonthCatSpend).reduce((s, v) => s + v, 0);
+        const curMonthTotal = sortedBudgetCats.reduce((s, { cat }) => s + (curMonthCatSpend[cat] || 0), 0);
 
         const thS = 'padding:8px 12px;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap;border-bottom:2px solid var(--border)';
         const headerCells = budgetYears.map(yr => `<th style="${thS};text-align:right">${yr}</th>`).join('');
 
-        const tableRows = sortedBudgetCats.map(({ cat, total }) => {
+        const makeBudgetRow = (cat, isChild) => {
+          const yd = catYearData[cat] || {};
+          const total = Object.values(yd).reduce((s, v) => s + v, 0);
           const color = catColor(cat);
           const lim = budgetLimits[cat];
           const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
           const isSel = budgetBudgetCat === cat;
           const avgMo = total / numBaseMonths;
           const yearCells = budgetYears.map(yr => {
-            const amt = catYearData[cat][yr] || 0;
+            const amt = yd[yr] || 0;
             const annualLim = lim ? lim * 12 : null;
             const over = annualLim && amt > annualLim;
-            return `<td style="text-align:right;padding:6px 12px;font-size:12px;color:${amt > 0 ? (over ? '#ef4444' : 'var(--text-primary)') : 'var(--text-muted)'};font-weight:${over ? '600' : '400'}">${amt > 0 ? fmtAUD(amt) : '—'}</td>`;
+            return `<td style="text-align:right;padding:${isChild?'4px':'6px'} 12px;font-size:${isChild?11:12}px;color:${amt > 0 ? (over ? '#ef4444' : 'var(--text-primary)') : 'var(--text-muted)'};font-weight:${over ? '600' : '400'}">${amt > 0 ? fmtAUD(amt) : '—'}</td>`;
           }).join('');
-
-          // Current month cell
           const curAmt = curMonthCatSpend[cat] || 0;
           const over = lim && curAmt > lim;
           const pct = avgMo > 0 ? Math.round((curAmt / avgMo) * 100) : 0;
           const deltaColor = over ? '#ef4444' : curAmt > avgMo ? '#f97316' : curAmt > 0 ? '#16a34a' : 'var(--text-muted)';
           const curCell = curAmt > 0
-            ? `<td style="text-align:right;padding:6px 12px;white-space:nowrap">
-                <div style="font-size:12px;color:${over ? '#ef4444' : 'var(--text-primary)'};font-weight:${over ? '600' : '400'}">${fmtAUD(curAmt)}</div>
+            ? `<td style="text-align:right;padding:${isChild?'4px':'6px'} 12px;white-space:nowrap">
+                <div style="font-size:${isChild?11:12}px;color:${over ? '#ef4444' : 'var(--text-primary)'};font-weight:${over ? '600' : '400'}">${fmtAUD(curAmt)}</div>
                 <div style="font-size:10px;color:${deltaColor}">${pct}% of avg${over ? ' ⚠' : ''}</div>
                </td>`
             : `<td style="text-align:right;padding:6px 12px;font-size:12px;color:var(--text-muted)">—</td>`;
-
-          return `<tr onclick="selectBudgetCat('${esc}')" style="cursor:pointer;border-bottom:1px solid var(--border-light);transition:background .1s${isSel ? ';background:var(--bg-secondary)' : ''}" onmouseenter="if(!${isSel})this.style.background='var(--bg-secondary)'" onmouseleave="if(!${isSel})this.style.background=''">
-            <td style="padding:6px 12px;white-space:nowrap">
-              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px"></span>
-              <span style="font-size:12px;color:var(--text-primary);font-weight:${isSel ? '600' : '400'}">${cat}</span>
-              ${lim ? `<span style="font-size:10px;color:var(--text-muted);margin-left:6px">/ ${fmtAUD(lim)}/mo</span>` : ''}
-            </td>
-            ${yearCells}
-            <td style="text-align:right;padding:6px 12px;font-size:12px;color:var(--text-muted)">${fmtAUD(avgMo)}</td>
+          const nameCell = isChild
+            ? `<td style="padding:4px 12px 4px 28px;white-space:nowrap">
+                <span style="font-size:10px;color:var(--text-muted);margin-right:4px">↳</span>
+                <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:5px"></span>
+                <span style="font-size:11px;color:var(--text-muted)">${cat}</span>
+               </td>`
+            : `<td style="padding:6px 12px;white-space:nowrap">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px"></span>
+                <span style="font-size:12px;color:var(--text-primary);font-weight:${isSel?'600':'400'}">${cat}</span>
+                ${lim ? `<span style="font-size:10px;color:var(--text-muted);margin-left:6px">/ ${fmtAUD(lim)}/mo</span>` : ''}
+               </td>`;
+          return `<tr onclick="selectBudgetCat('${esc}')" style="cursor:pointer;border-bottom:1px solid var(--border-light);transition:background .1s${isSel?';background:var(--bg-secondary)':''}" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background='${isSel?'var(--bg-secondary)':''}'">
+            ${nameCell}${yearCells}
+            <td style="text-align:right;padding:6px 12px;font-size:${isChild?11:12}px;color:var(--text-muted)">${fmtAUD(avgMo)}</td>
             ${curCell}
           </tr>`;
+        };
+
+        const tableRows = sortedBudgetCats.map(({ cat }) => {
+          const children = childrenOf(cat).filter(c => catYearData[_bsp[c]] !== undefined || catYearData[c]);
+          return makeBudgetRow(cat, false) + children.map(c => makeBudgetRow(c, true)).join('');
         }).join('');
 
         const footerCells = budgetYears.map(yr => `<td style="text-align:right;padding:8px 12px;font-size:12px;font-weight:700">${fmtAUD(yearTotalMap[yr])}</td>`).join('');
@@ -2505,7 +2552,7 @@
           else if (budgetSelectedYear) catTxs = catTxs.filter(t => t.month.startsWith(budgetSelectedYear));
           catTxs.sort((a, b) => b.date - a.date);
 
-          const catAllTime = sortedBudgetCats.find(x => x.cat === cat)?.total || 0;
+          const catAllTime = Object.values(catYearData[cat] || {}).reduce((s, v) => s + v, 0);
           const periodLabel = budgetSelectedMonth ? fmtMonth(budgetSelectedMonth) : budgetSelectedYear ? budgetSelectedYear : 'all time';
 
           budgetDrillHtml = `<div style="border-left:4px solid ${color};padding-left:14px">
