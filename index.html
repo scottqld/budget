@@ -196,7 +196,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.74</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.75</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1421,6 +1421,53 @@
       return results.sort((a, b) => b.avgAmt - a.avgAmt);
     }
 
+    // ===== HELPERS =====
+    function buildDonut(entries, total) {
+      const top = entries.slice(0, 8);
+      const otherAmt = entries.slice(8).reduce((s, [, a]) => s + a, 0);
+      if (!top.length) return { svg: '', legend: '' };
+      const allSlices = [...top, ...(otherAmt > 0 ? [['Other', otherAmt]] : [])].sort((a, b) => b[1] - a[1]);
+      const r = 54, cx = 74, cy = 74, sw = 26;
+      const C = 2 * Math.PI * r;
+      let cum = 0;
+      const slices = allSlices.map(([cat, amt]) => {
+        const color = cat === 'Other' ? '#9ca3af' : catColor(cat);
+        const dash = (amt / total) * C;
+        const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const clickable = cat !== 'Other';
+        const s = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="${sw}"
+          stroke-dasharray="${dash.toFixed(2)} ${(C - dash).toFixed(2)}"
+          stroke-dashoffset="${(C / 4 - cum).toFixed(2)}"
+          ${clickable ? `style="cursor:pointer" onclick="selectOverviewCategory('${esc}')"` : ''}><title>${cat}: ${fmtAUD(amt)} (${Math.round((amt/total)*100)}%)</title></circle>`;
+        cum += dash;
+        return s;
+      }).join('');
+      const legend = allSlices.map(([cat, amt]) => {
+        const pct = Math.round((amt / total) * 100);
+        if (cat === 'Other') {
+          return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0">
+            <span style="width:10px;height:10px;border-radius:2px;background:#9ca3af;flex-shrink:0"></span>
+            <span style="font-size:12px;color:var(--text-muted);flex:1">Other</span>
+            <span style="font-size:11px;color:var(--text-muted);min-width:28px;text-align:right">${pct}%</span>
+            <span style="font-size:12px;color:var(--text-muted);min-width:68px;text-align:right">${fmtAUD(amt)}</span>
+          </div>`;
+        }
+        const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        return `<div onclick="selectOverviewCategory('${esc}')" style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer">
+          <span style="width:10px;height:10px;border-radius:2px;background:${catColor(cat)};flex-shrink:0"></span>
+          <span style="font-size:12px;color:var(--text-primary);flex:1">${cat}</span>
+          <span style="font-size:11px;color:var(--text-muted);min-width:28px;text-align:right">${pct}%</span>
+          <span style="font-size:12px;font-weight:600;color:var(--text-primary);min-width:68px;text-align:right">${fmtAUD(amt)}</span>
+        </div>`;
+      }).join('');
+      const svg = `<svg width="${cx*2}" height="${cy*2}" style="flex-shrink:0;overflow:visible">
+        ${slices}
+        <text x="${cx}" y="${cy-7}" text-anchor="middle" style="font-size:10px;fill:var(--text-muted)">Total</text>
+        <text x="${cx}" y="${cy+10}" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--text-primary)">${fmtAUD(total)}</text>
+      </svg>`;
+      return { svg, legend };
+    }
+
     // ===== RENDER =====
     async function renderBudget() {
       if (!budgetTransactions.length) {
@@ -1622,57 +1669,55 @@
         </div>`;
       }).join('');
 
-      // Spending breakdown donut chart
-      const _allDonutCats = cats.filter(([, a]) => a > 0);
-      const donutCats = _allDonutCats.slice(0, 8);
-      const otherAmt = _allDonutCats.slice(8).reduce((s, [, a]) => s + a, 0);
-      const donutTotal = totalExp; // always matches the expenses figure at top
+      // Spending breakdown donut chart — tabbed (independent of period filter)
+      const _bdTab = localStorage.getItem('budget_breakdown_tab') || 'yearly';
+      const _bdNow = new Date();
+      const _bdCurYear = String(_bdNow.getFullYear());
+      const _bdCurMonthKey = `${_bdNow.getFullYear()}-${String(_bdNow.getMonth()+1).padStart(2,'0')}`;
+      const _bdLastDate = new Date(_bdNow.getFullYear(), _bdNow.getMonth() - 1, 1);
+      const _bdLastMonthKey = `${_bdLastDate.getFullYear()}-${String(_bdLastDate.getMonth()+1).padStart(2,'0')}`;
+      const _bdBase = budgetSelectedAccount
+        ? budgetTransactions.filter(t => t.account === budgetSelectedAccount)
+        : budgetTransactions;
+      const _bdCatSpend = txList => {
+        const m = {};
+        txList.forEach(t => { if (t.debit > 0) { const c = effectiveCat(t); if (c === 'Uncategorised' || EXCLUDED_CATS.has(c)) return; m[c] = (m[c] || 0) + t.debit; } });
+        return Object.entries(m).sort((a, b) => b[1] - a[1]);
+      };
+      let _bdEntries;
+      if (_bdTab === 'avgmo') {
+        const _allMs = new Set(_bdBase.map(t => t.month));
+        const _n = _allMs.size || 1;
+        _bdEntries = _bdCatSpend(_bdBase).map(([cat, total]) => [cat, total / _n]);
+      } else if (_bdTab === 'lastmonth') {
+        _bdEntries = _bdCatSpend(_bdBase.filter(t => t.month === _bdLastMonthKey));
+      } else if (_bdTab === 'curmonth') {
+        const _sortedMs = [...new Set(_bdBase.map(t => t.month))].sort();
+        const _effM = _sortedMs.includes(_bdCurMonthKey) ? _bdCurMonthKey : (_sortedMs[_sortedMs.length - 1] || _bdCurMonthKey);
+        _bdEntries = _bdCatSpend(_bdBase.filter(t => t.month === _effM));
+      } else {
+        _bdEntries = _bdCatSpend(_bdBase.filter(t => t.month && t.month.startsWith(_bdCurYear)));
+      }
+      const _bdTotal = _bdEntries.reduce((s, [, a]) => s + a, 0);
+      const _bdDonut = buildDonut(_bdEntries, _bdTotal);
+      const _bdTabBtn = (id, label) => {
+        const active = _bdTab === id;
+        return `<button onclick="selectBreakdownTab('${id}')" style="font-size:11px;padding:4px 10px;border-radius:4px;border:1px solid ${active ? 'var(--accent)' : 'var(--border-light)'};background:${active ? 'var(--accent)' : 'transparent'};color:${active ? '#fff' : 'var(--text-muted)'};cursor:pointer">${label}</button>`;
+      };
       let spendingBreakdownPanel = '';
-      if (donutCats.length) {
-        const r = 54, cx = 74, cy = 74, sw = 26;
-        const C = 2 * Math.PI * r;
-        let cum = 0;
-        const allSliceCats = [...donutCats, ...(otherAmt > 0 ? [['Other', otherAmt]] : [])].sort((a, b) => b[1] - a[1]);
-        const slices = allSliceCats.map(([cat, amt]) => {
-          const color = cat === 'Other' ? '#9ca3af' : catColor(cat);
-          const dash = (amt / donutTotal) * C;
-          const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-          const clickable = cat !== 'Other';
-          const s = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="${sw}"
-            stroke-dasharray="${dash.toFixed(2)} ${(C - dash).toFixed(2)}"
-            stroke-dashoffset="${(C / 4 - cum).toFixed(2)}"
-            ${clickable ? `style="cursor:pointer" onclick="selectOverviewCategory('${esc}')"` : ''}><title>${cat}: ${fmtAUD(amt)} (${Math.round((amt/donutTotal)*100)}%)</title></circle>`;
-          cum += dash;
-          return s;
-        }).join('');
-        const legendRows = allSliceCats.map(([cat, amt]) => {
-          const pct = Math.round((amt / donutTotal) * 100);
-          if (cat === 'Other') {
-            return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0">
-              <span style="width:10px;height:10px;border-radius:2px;background:#9ca3af;flex-shrink:0"></span>
-              <span style="font-size:12px;color:var(--text-muted);flex:1">Other</span>
-              <span style="font-size:11px;color:var(--text-muted);min-width:28px;text-align:right">${pct}%</span>
-              <span style="font-size:12px;color:var(--text-muted);min-width:68px;text-align:right">${fmtAUD(amt)}</span>
-            </div>`;
-          }
-          const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-          return `<div onclick="selectOverviewCategory('${esc}')" style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer">
-            <span style="width:10px;height:10px;border-radius:2px;background:${catColor(cat)};flex-shrink:0"></span>
-            <span style="font-size:12px;color:var(--text-primary);flex:1">${cat}</span>
-            <span style="font-size:11px;color:var(--text-muted);min-width:28px;text-align:right">${pct}%</span>
-            <span style="font-size:12px;font-weight:600;color:var(--text-primary);min-width:68px;text-align:right">${fmtAUD(amt)}</span>
-          </div>`;
-        }).join('');
+      if (_bdEntries.length) {
         spendingBreakdownPanel = `<div style="margin-bottom:16px">
-          <div class="budget-section-title" style="margin-bottom:10px">Spending breakdown <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${budgetSelectedMonth ? fmtMonth(budgetSelectedMonth) : budgetSelectedYear ? budgetSelectedYear : 'all time'}</span></div>
+          <div class="budget-section-title" style="margin-bottom:10px">Spending breakdown</div>
           <div class="budget-panel-box" style="padding:16px">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+              ${_bdTabBtn('yearly', _bdCurYear)}
+              ${_bdTabBtn('avgmo', 'Avg / mo')}
+              ${_bdTabBtn('lastmonth', fmtMonth(_bdLastMonthKey))}
+              ${_bdTabBtn('curmonth', 'This month')}
+            </div>
             <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
-              <svg width="${cx*2}" height="${cy*2}" style="flex-shrink:0;overflow:visible">
-                ${slices}
-                <text x="${cx}" y="${cy-7}" text-anchor="middle" style="font-size:10px;fill:var(--text-muted)">Total</text>
-                <text x="${cx}" y="${cy+10}" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--text-primary)">${fmtAUD(donutTotal)}</text>
-              </svg>
-              <div style="flex:1;min-width:180px">${legendRows}</div>
+              ${_bdDonut.svg}
+              <div style="flex:1;min-width:180px">${_bdDonut.legend}</div>
             </div>
           </div>
         </div>`;
@@ -2639,6 +2684,7 @@
     }
 
     function selectMonth(m) { budgetSelectedMonth = m; budgetSelectedCategory = null; budgetSelectedIncomeSource = null; window.scrollTo({top:0}); renderBudget(); }
+    function selectBreakdownTab(tab) { localStorage.setItem('budget_breakdown_tab', tab); renderBudget(); }
     function selectYear(yr) {
       budgetSelectedYear = yr === null ? null : yr;
       budgetSelectedMonth = null;
@@ -2860,6 +2906,7 @@
     window.selectYear = selectYear;
     window.selectCategory = selectCategory;
     window.selectDrillTab = selectDrillTab;
+    window.selectBreakdownTab = selectBreakdownTab;
     function toggleExcludedCat(cat) {
       if (EXCLUDED_CATS.has(cat)) EXCLUDED_CATS.delete(cat);
       else EXCLUDED_CATS.add(cat);
