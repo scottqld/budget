@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.7</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.8</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1742,6 +1742,8 @@
       const months = allMonths();
       const years = allYears();
       const inclUnaccounted = budgetSelectedTab === 'all';
+      // Latest month with data (user rarely uploads current month, so treat this as "last month")
+      const _latestMonth = [...new Set(budgetTransactions.map(t => t.month))].filter(Boolean).sort().pop() || null;
       const totalInc = txs.reduce((s, t) => { const c = effectiveCat(t); return (inclUnaccounted || (c !== 'Uncategorised' && !EXCLUDED_CATS.has(c))) ? s + t.credit : s; }, 0);
       const totalExp = txs.reduce((s, t) => { const c = effectiveCat(t); return (inclUnaccounted || (c !== 'Uncategorised' && !EXCLUDED_CATS.has(c))) ? s + t.debit : s; }, 0);
       const net = totalInc - totalExp;
@@ -2377,9 +2379,8 @@
         }
         // Last month vs avg vs current month comparison panel
         const _cmpMonthlyData = monthlyTotals();
-        const _todayM = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
         const _cmpAllMonths = _cmpMonthlyData.map(([m]) => m);
-        const _cmpCurMonth = _cmpAllMonths.includes(_todayM) ? _todayM : _cmpAllMonths[_cmpAllMonths.length - 1] || null;
+        const _cmpCurMonth = _latestMonth && _cmpAllMonths.includes(_latestMonth) ? _latestMonth : _cmpAllMonths[_cmpAllMonths.length - 1] || null;
         const _cmpLastMonth = _cmpCurMonth ? _cmpAllMonths[_cmpAllMonths.indexOf(_cmpCurMonth) - 1] || null : null;
         const _cmpN = _cmpAllMonths.length || 1;
         const _cmpGet = m => { const d = _cmpMonthlyData.find(([k]) => k === m); return d ? d[1] : { inc: 0, exp: 0 }; };
@@ -2409,7 +2410,7 @@
                 </td>
                 ${_cmpLastMonth ? _cmpCol(fmtMonth(_cmpLastMonth), _cmpLast) : ''}
                 ${_cmpCol('Avg / mo', _cmpAvg)}
-                ${_cmpCol(_cmpCurMonth ? fmtMonth(_cmpCurMonth) : 'Current', _cmpCur, true)}
+                ${_cmpCol(_cmpCurMonth ? fmtMonth(_cmpCurMonth) : 'Last month', _cmpCur, true)}
               </tr></tbody>
             </table>
           </div>
@@ -2417,11 +2418,11 @@
 
         // Monthly spending goal panel
         const _mgGoal = getMonthlyGoal();
-        const _mgNow = new Date().toISOString().slice(0, 7);
+        const _mgNow = _latestMonth;
         const _mgMonthly = monthlyTotals();
         const _mgCurData = _mgMonthly.find(([m]) => m === _mgNow);
         const _mgCurSpend = _mgCurData ? _mgCurData[1].exp : 0;
-        const _mgCompleted = _mgMonthly.filter(([m]) => m < _mgNow);
+        const _mgCompleted = _mgMonthly.filter(([m]) => m <= _mgNow);
         const _mgLast3 = _mgCompleted.slice(-3);
         const _mgPrior3 = _mgCompleted.slice(-6, -3);
         const _mgAvg = _mgLast3.length ? _mgLast3.reduce((s, [, d]) => s + d.exp, 0) / _mgLast3.length : 0;
@@ -2452,7 +2453,7 @@
             </div>
             <div style="margin-bottom:10px">
               <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:4px">
-                <span>This month (${fmtMonth(_mgNow)})</span>
+                <span>Last month (${_mgNow ? fmtMonth(_mgNow) : '—'})</span>
                 <span style="font-weight:600;color:${_mgBarColor}">${fmtAUD(_mgCurSpend)} / ${fmtAUD(_mgGoal)}${_mgOver ? ' — over by ' + fmtAUD(_mgCurSpend - _mgGoal) : ''}</span>
               </div>
               <div style="height:8px;background:var(--bg-secondary);border-radius:4px;overflow:hidden">
@@ -2467,16 +2468,17 @@
         </div>`;
 
         // Cutback Planner panel
-        const _cbNow = new Date().toISOString().slice(0, 7);
-        const _cbLast3Months = monthlyTotals().filter(([m]) => m < _cbNow).slice(-3).map(([m]) => m);
+        const _cbLast3Months = _latestMonth ? monthlyTotals().filter(([m]) => m <= _latestMonth).slice(-3).map(([m]) => m) : [];
         const _cbN = _cbLast3Months.length || 1;
-        const _cbCatSpend = {};
+        const _cbCatSpend = {}, _cbPrevSpend = {};
         budgetTransactions.forEach(t => {
-          if (!_cbLast3Months.includes(t.month) || t.debit <= 0) return;
+          if (t.debit <= 0) return;
           const _cbc = effectiveCat(t);
           if (EXCLUDED_CATS.has(_cbc) || _cbc === 'Uncategorised') return;
-          _cbCatSpend[_cbc] = (_cbCatSpend[_cbc] || 0) + t.debit;
+          if (_cbLast3Months.includes(t.month)) _cbCatSpend[_cbc] = (_cbCatSpend[_cbc] || 0) + t.debit;
+          if (t.month === _latestMonth) _cbPrevSpend[_cbc] = (_cbPrevSpend[_cbc] || 0) + t.debit;
         });
+        const _cbPrevRolled = rollToParents(_cbPrevSpend);
         const _cbAvgs = Object.entries(rollToParents(_cbCatSpend)).map(([cat, total]) => [cat, total / _cbN]).filter(([, a]) => a > 0).sort((a, b) => b[1] - a[1]);
         const _cbTotalAvg = _cbAvgs.reduce((s, [, a]) => s + a, 0);
         const _cbGoal = getMonthlyGoal();
@@ -2488,16 +2490,17 @@
             const target = avg; // start at current spend — user drags or uses Auto-distribute
             const savings = 0;
             const color = catColor(cat);
+            const prevAmt = _cbPrevRolled[cat] || 0;
             return `<div class="cb-row" data-cat="${cat.replace(/"/g, '&quot;')}" data-avg="${avg.toFixed(2)}" style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-light)">
               <div style="flex:1;display:flex;align-items:center;gap:6px;min-width:0">
                 <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
                 <span style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cat}</span>
-                <span style="font-size:11px;color:var(--text-muted);flex-shrink:0">avg ${fmtAUD(avg)}</span>
+                <span style="font-size:11px;color:var(--text-muted);flex-shrink:0">${fmtAUD(avg)}</span>
               </div>
-              <input type="range" class="cb-slider" min="0" max="${Math.ceil(avg)}" step="1" value="${target}" ${isFixed ? 'disabled' : ''} oninput="updateCutbackPlan()" style="width:110px;flex-shrink:0;accent-color:${color}">
-              <span style="font-size:10px;color:var(--text-muted);flex-shrink:0">Target</span>
+              <input type="range" class="cb-slider" min="0" max="${Math.ceil(avg)}" step="1" value="${target}" ${isFixed ? 'disabled' : ''} oninput="updateCutbackPlan()" style="width:100px;flex-shrink:0;accent-color:${color}">
               <span class="cb-target" style="font-size:12px;font-weight:600;flex:0 0 72px;color:var(--text-primary)">${fmtAUD(target)}</span>
-              <span class="cb-save" style="font-size:11px;color:var(--accent);flex:0 0 88px;text-align:right">${savings > 0.5 ? '−'+fmtAUD(savings)+'/mo' : '—'}</span>
+              <span class="cb-prev" style="font-size:11px;flex:0 0 72px;color:${prevAmt > avg ? 'var(--accent)' : prevAmt < avg * 0.9 ? '#16a34a' : 'var(--text-muted)'}">${prevAmt > 0 ? fmtAUD(prevAmt) : '—'}</span>
+              <span class="cb-save" style="font-size:11px;color:var(--accent);flex:0 0 80px;text-align:right">${savings > 0.5 ? '−'+fmtAUD(savings) : '—'}</span>
               <button class="cb-fixed-btn" onclick="toggleCutbackFixed(this.closest('.cb-row').dataset.cat)" style="font-size:10px;padding:2px 8px;border:1px solid ${isFixed ? 'var(--accent)' : 'var(--border)'};border-radius:4px;background:${isFixed ? 'var(--accent)' : 'var(--bg-secondary)'};color:${isFixed ? '#fff' : 'var(--text-muted)'};cursor:pointer;flex-shrink:0">Fixed</button>
             </div>`;
           }).join('');
@@ -2512,6 +2515,14 @@
                 <div id="cb-summary"><span style="color:#ef4444;font-weight:600">${fmtAUD(_cbGap)}/mo to cut</span></div>
               </div>
               <div style="height:6px;background:var(--bg-secondary);border-radius:3px;margin-bottom:14px;overflow:hidden"><div id="cb-progress-bar" style="height:100%;border-radius:3px;background:#f59e0b;width:0%;transition:width 0.3s"></div></div>
+              <div style="display:flex;align-items:center;gap:8px;padding:0 0 6px;border-bottom:2px solid var(--border-light);margin-bottom:2px">
+                <div style="flex:1;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Category · 3-month avg</div>
+                <div style="width:100px;flex-shrink:0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);text-align:center">Adjust</div>
+                <div style="flex:0 0 72px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Target</div>
+                <div style="flex:0 0 72px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Last month</div>
+                <div style="flex:0 0 80px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);text-align:right">Saving</div>
+                <div style="width:46px;flex-shrink:0"></div>
+              </div>
               ${cbRows}
             </div>
           </div>`;
@@ -2606,8 +2617,7 @@
         const numBaseMonths = allBaseMonths.length || 1;
 
         // Current month: prefer today's month if data exists, else latest in dataset
-        const todayMonth = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
-        const curMonth = allBaseMonths.includes(todayMonth) ? todayMonth : allBaseMonths[allBaseMonths.length - 1] || todayMonth;
+        const curMonth = _latestMonth && allBaseMonths.includes(_latestMonth) ? _latestMonth : allBaseMonths[allBaseMonths.length - 1] || null;
         const curMonthLabel = fmtMonth(curMonth);
 
         // Per-category spend in the current month
