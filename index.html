@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.79</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.80</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1529,7 +1529,7 @@
         const color = cat === 'Other' ? '#9ca3af' : catColor(cat);
         const muted = cat === 'Other';
         const esc = muted ? '' : cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        const rowAttrs = muted ? '' : `onclick="selectOverviewCategory('${esc}')" style="cursor:pointer" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background=''`;
+        const rowAttrs = muted ? '' : `onclick="selectOverviewCategory('${esc}')" style="cursor:pointer" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background=''"` ;
         return `<tr ${rowAttrs}>
           <td style="padding:3px 6px 3px 0;width:12px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${color}"></span></td>
           <td style="padding:3px 4px;font-size:12px;color:${muted ? 'var(--text-muted)' : 'var(--text-primary)'}">${cat}</td>
