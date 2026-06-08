@@ -196,7 +196,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.73</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.74</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1458,11 +1458,15 @@
         <button class="budget-month-btn${budgetSelectedYear && !budgetSelectedMonth ? ' active' : ''}" onclick="selectMonth(null)">All ${budgetSelectedYear}</button>
       </div>` : '';
 
-      const cards = `<div class="budget-summary-cards">
-        <div class="budget-card"><div class="budget-card-label">Income</div><div class="budget-card-value income">${fmtAUD(totalInc)}</div></div>
-        <div class="budget-card"><div class="budget-card-label">Expenses</div><div class="budget-card-value expense">${fmtAUD(totalExp)}</div></div>
-        <div class="budget-card"><div class="budget-card-label">Net savings</div><div class="budget-card-value ${net >= 0 ? 'income' : 'expense'}">${net >= 0 ? '+' : '−'}${fmtAUD(Math.abs(net))}</div></div>
-        <div class="budget-card"><div class="budget-card-label">Savings rate</div><div class="budget-card-value ${net >= 0 ? 'income' : 'expense'}">${totalInc > 0 ? Math.round(net / totalInc * 100) + '%' : '—'}</div></div>
+      const _cardPeriodLabel = budgetSelectedMonth ? fmtMonth(budgetSelectedMonth) : budgetSelectedYear ? budgetSelectedYear : 'All time';
+      const cards = `<div style="margin-bottom:16px">
+        <div class="budget-section-title" style="margin-bottom:10px">Summary <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${_cardPeriodLabel}</span></div>
+        <div class="budget-summary-cards" style="margin-bottom:0">
+          <div class="budget-card"><div class="budget-card-label">Income</div><div class="budget-card-value income">${fmtAUD(totalInc)}</div></div>
+          <div class="budget-card"><div class="budget-card-label">Expenses</div><div class="budget-card-value expense">${fmtAUD(totalExp)}</div></div>
+          <div class="budget-card"><div class="budget-card-label">Net savings</div><div class="budget-card-value ${net >= 0 ? 'income' : 'expense'}">${net >= 0 ? '+' : '−'}${fmtAUD(Math.abs(net))}</div></div>
+          <div class="budget-card"><div class="budget-card-label">Savings rate</div><div class="budget-card-value ${net >= 0 ? 'income' : 'expense'}">${totalInc > 0 ? Math.round(net / totalInc * 100) + '%' : '—'}</div></div>
+        </div>
       </div>`;
 
       // Monthly savings chart (shown when a year is selected but no specific month)
@@ -1674,14 +1678,17 @@
         </div>`;
       }
 
-      const comparePanel = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-        <div>
-          <div class="budget-section-title" style="margin-bottom:10px;color:#16a34a">Incomings <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${fmtAUD(totalInc)}</span></div>
-          <div class="budget-panel-box">${incSrcRows || '<div style="padding:16px;color:var(--text-muted);font-size:13px;text-align:center">No income</div>'}</div>
-        </div>
-        <div>
-          <div class="budget-section-title" style="margin-bottom:10px;color:var(--accent)">Outgoings <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${fmtAUD(totalExp)}</span></div>
-          <div class="budget-panel-box">${outRows || noData()}</div>
+      const comparePanel = `<div style="margin-bottom:16px">
+        <div class="budget-section-title" style="margin-bottom:10px">Income &amp; expenses <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${_cardPeriodLabel}</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div>
+            <div class="budget-section-title" style="margin-bottom:10px;color:#16a34a">Incomings <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${fmtAUD(totalInc)}</span></div>
+            <div class="budget-panel-box">${incSrcRows || '<div style="padding:16px;color:var(--text-muted);font-size:13px;text-align:center">No income</div>'}</div>
+          </div>
+          <div>
+            <div class="budget-section-title" style="margin-bottom:10px;color:var(--accent)">Outgoings <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${fmtAUD(totalExp)}</span></div>
+            <div class="budget-panel-box">${outRows || noData()}</div>
+          </div>
         </div>
       </div>`;
 
