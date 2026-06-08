@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.80</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.81</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1537,7 +1537,7 @@
           <td style="padding:3px 0 3px 8px;font-size:12px;font-weight:${muted ? '400' : '600'};color:${muted ? 'var(--text-muted)' : 'var(--text-primary)'};text-align:right;white-space:nowrap">${fmtAUD(amt)}</td>
         </tr>`;
       }).join('');
-      const legend = `<table style="width:100%;border-collapse:collapse">${legendRows}</table>`;
+      const legend = `<table style="width:auto;border-collapse:collapse">${legendRows}</table>`;
       const svg = `<svg width="${cx*2}" height="${cy*2}" style="flex-shrink:0;overflow:visible">
         ${slices}
         <text x="${cx}" y="${cy-7}" text-anchor="middle" style="font-size:10px;fill:var(--text-muted)">Total</text>
