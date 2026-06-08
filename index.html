@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.2</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.3</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1664,11 +1664,15 @@
       </div>` : '';
 
       const _cardPeriodLabel = budgetSelectedMonth ? fmtMonth(budgetSelectedMonth) : budgetSelectedYear ? budgetSelectedYear : 'All time';
+      const _allMos = allMonths();
+      const _moCount = budgetSelectedMonth ? 1 : budgetSelectedYear ? _allMos.filter(m => m.startsWith(budgetSelectedYear)).length : _allMos.length;
+      const _avgMonthlyExp = _moCount > 0 ? totalExp / _moCount : 0;
       const cards = `<div style="margin-bottom:16px">
         <div class="budget-section-title" style="margin-bottom:10px">Summary <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${_cardPeriodLabel}</span></div>
         <div class="budget-summary-cards" style="margin-bottom:0">
+          <div class="budget-card"><div class="budget-card-label">Total spend</div><div class="budget-card-value expense">−${fmtAUD(totalExp)}</div></div>
+          ${_moCount > 1 ? `<div class="budget-card"><div class="budget-card-label">Avg / month</div><div class="budget-card-value expense">−${fmtAUD(_avgMonthlyExp)}</div></div>` : ''}
           <div class="budget-card"><div class="budget-card-label">Net savings</div><div class="budget-card-value ${net >= 0 ? 'income' : 'expense'}">${net >= 0 ? '+' : '−'}${fmtAUD(Math.abs(net))}</div></div>
-          <div class="budget-card"><div class="budget-card-label">Savings rate</div><div class="budget-card-value ${net >= 0 ? 'income' : 'expense'}">${totalInc > 0 ? Math.round(net / totalInc * 100) + '%' : '—'}</div></div>
         </div>
       </div>`;
 
@@ -2362,7 +2366,7 @@
           </div>
         </div>`;
 
-        const _ovPanels = { cards, goal: goalPanel, savings: savingsPanel, annual: annualSummaryPanel, breakdown: spendingBreakdownPanel, monthlyCompare: monthlyComparePanel };
+        const _ovPanels = { cards, goal: goalPanel, breakdown: spendingBreakdownPanel, monthlyCompare: monthlyComparePanel };
         const _ovOrder = getOverviewOrder();
         const _ovFull = [..._ovOrder.filter(id => id in _ovPanels), ...OV_DEFAULT_ORDER.filter(id => !_ovOrder.includes(id) && id in _ovPanels)];
         const _ovHtml = _ovFull.map(id => _ovPanels[id] ? ovDraggable(id, _ovPanels[id]) : '').join('');
@@ -2422,7 +2426,7 @@
           catLinePanel = sec('catline', 'Category trends', `<div class="budget-panel-box" style="padding:12px 16px">${chartSvg}${legendHtml}</div>`);
         }
 
-        tabContent = catLinePanel + cards + balPanel + annualPanel + trendPanel;
+        tabContent = catLinePanel + annualPanel + trendPanel + annualSummaryPanel + savingsPanel + balPanel;
       } else if (budgetSelectedTab === 'budget') {
         const budgetYears = [...new Set(budgetTransactions.map(t => t.month.split('-')[0]))].sort();
 
@@ -2840,7 +2844,7 @@
       if (content) content.style.display = s.has(id) ? 'none' : '';
       if (btn) btn.textContent = s.has(id) ? '›' : '⌄';
     }
-    const OV_DEFAULT_ORDER = ['cards', 'goal', 'monthlyCompare', 'savings', 'annual', 'breakdown'];
+    const OV_DEFAULT_ORDER = ['cards', 'goal', 'breakdown', 'monthlyCompare'];
     function getOverviewOrder() {
       try {
         const o = JSON.parse(localStorage.getItem('budget_overview_order') || '[]');
