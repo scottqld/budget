@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.99</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.0</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1667,8 +1667,6 @@
       const cards = `<div style="margin-bottom:16px">
         <div class="budget-section-title" style="margin-bottom:10px">Summary <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${_cardPeriodLabel}</span></div>
         <div class="budget-summary-cards" style="margin-bottom:0">
-          <div class="budget-card"><div class="budget-card-label">Income</div><div class="budget-card-value income">${fmtAUD(totalInc)}</div></div>
-          <div class="budget-card"><div class="budget-card-label">Expenses</div><div class="budget-card-value expense">${fmtAUD(totalExp)}</div></div>
           <div class="budget-card"><div class="budget-card-label">Net savings</div><div class="budget-card-value ${net >= 0 ? 'income' : 'expense'}">${net >= 0 ? '+' : '−'}${fmtAUD(Math.abs(net))}</div></div>
           <div class="budget-card"><div class="budget-card-label">Savings rate</div><div class="budget-card-value ${net >= 0 ? 'income' : 'expense'}">${totalInc > 0 ? Math.round(net / totalInc * 100) + '%' : '—'}</div></div>
         </div>
