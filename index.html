@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.77</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.78</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1529,17 +1529,17 @@
         if (cat === 'Other') {
           return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0">
             <span style="width:10px;height:10px;border-radius:2px;background:#9ca3af;flex-shrink:0"></span>
-            <span style="font-size:12px;color:var(--text-muted);flex:1">Other</span>
-            <span style="font-size:11px;color:var(--text-muted);min-width:28px;text-align:right">${pct}%</span>
-            <span style="font-size:12px;color:var(--text-muted);min-width:68px;text-align:right">${fmtAUD(amt)}</span>
+            <span style="font-size:12px;color:var(--text-muted)">Other</span>
+            <span style="font-size:11px;color:var(--text-muted)">${pct}%</span>
+            <span style="font-size:12px;color:var(--text-muted)">${fmtAUD(amt)}</span>
           </div>`;
         }
         const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         return `<div onclick="selectOverviewCategory('${esc}')" style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer">
           <span style="width:10px;height:10px;border-radius:2px;background:${catColor(cat)};flex-shrink:0"></span>
-          <span style="font-size:12px;color:var(--text-primary);flex:1">${cat}</span>
-          <span style="font-size:11px;color:var(--text-muted);min-width:28px;text-align:right">${pct}%</span>
-          <span style="font-size:12px;font-weight:600;color:var(--text-primary);min-width:68px;text-align:right">${fmtAUD(amt)}</span>
+          <span style="font-size:12px;color:var(--text-primary)">${cat}</span>
+          <span style="font-size:11px;color:var(--text-muted)">${pct}%</span>
+          <span style="font-size:12px;font-weight:600;color:var(--text-primary)">${fmtAUD(amt)}</span>
         </div>`;
       }).join('');
       const svg = `<svg width="${cx*2}" height="${cy*2}" style="flex-shrink:0;overflow:visible">
