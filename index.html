@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.90</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.91</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -2154,13 +2154,12 @@
         <span style="font-size:11px;color:var(--text-muted);min-width:36px;text-align:right;flex-shrink:0">${uncatCount>0?uncatCount+'&nbsp;tx':''}</span>
         <span style="width:11px;flex-shrink:0"></span><span style="width:12px;flex-shrink:0"></span>
       </div>`;
-      const addCatRow = `<div onclick="showAddCategoryModal()" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;transition:background .1s" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background='transparent'">
-        <span style="font-size:14px;color:var(--text-muted)">+</span>
-        <span style="font-size:12px;font-weight:600;color:var(--text-muted)">New category</span>
-      </div>`;
       const catGrid = `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px">
+        <div style="display:flex;justify-content:flex-end">
+          <button onclick="showAddCategoryModal()" class="primary" style="font-size:12px;padding:6px 14px;border-radius:6px;cursor:pointer;font-family:inherit">+ New category</button>
+        </div>
         ${catGroups}
-        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:4px">${uncatRow}${addCatRow}</div>
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:4px">${uncatRow}</div>
       </div>`;
 
       // Top spending categories panel for the Categories tab
