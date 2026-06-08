@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.5</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.6</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -869,11 +869,12 @@
       if (!container) return;
       const goal = getMonthlyGoal();
       const rows = [...document.querySelectorAll('.cb-row')];
+      const fixedTotal = rows.filter(r => _cutbackFixed.has(r.dataset.cat)).reduce((s, r) => s + parseFloat(r.dataset.avg), 0);
       const flexRows = rows.filter(r => !_cutbackFixed.has(r.dataset.cat));
       const flexTotal = flexRows.reduce((s, r) => s + parseFloat(r.dataset.avg), 0);
-      const totalAvg = parseFloat(container.dataset.avg);
-      const pct = flexTotal > 0 ? Math.min(Math.max((totalAvg - goal) / flexTotal * 100, 0), 100) : 0;
-      flexRows.forEach(r => { r.querySelector('.cb-slider').value = pct.toFixed(0); });
+      const requiredFlex = Math.max(goal - fixedTotal, 0);
+      const scale = flexTotal > 0 ? requiredFlex / flexTotal : 1;
+      flexRows.forEach(r => { r.querySelector('.cb-slider').value = Math.round(parseFloat(r.dataset.avg) * scale); });
       updateCutbackPlan();
     }
     function updateCutbackPlan() {
@@ -885,12 +886,11 @@
       let totalSavings = 0;
       document.querySelectorAll('.cb-row').forEach(row => {
         const avg = parseFloat(row.dataset.avg);
-        const pct = parseFloat(row.querySelector('.cb-slider').value) / 100;
-        const savings = avg * pct;
+        const target = parseFloat(row.querySelector('.cb-slider').value);
+        const savings = Math.max(avg - target, 0);
         totalSavings += savings;
-        row.querySelector('.cb-pct').textContent = Math.round(pct * 100) + '%';
-        row.querySelector('.cb-save').textContent = savings > 0.5 ? '−' + fmtAUD(savings) : '—';
-        row.querySelector('.cb-target').textContent = fmtAUD(avg - savings);
+        row.querySelector('.cb-save').textContent = savings > 0.5 ? '−' + fmtAUD(savings) + '/mo' : '—';
+        row.querySelector('.cb-target').textContent = fmtAUD(target);
       });
       const remaining = gap - totalSavings;
       const summaryEl = document.getElementById('cb-summary');
@@ -2482,24 +2482,25 @@
         const _cbGap = _cbTotalAvg - _cbGoal;
         let cutbackPanel = '';
         if (_cbAvgs.length > 0 && _cbGap > 0) {
+          const _cbFixedTotal = _cbAvgs.filter(([cat]) => _cutbackFixed.has(cat)).reduce((s, [, a]) => s + a, 0);
           const _cbFlexTotal = _cbAvgs.filter(([cat]) => !_cutbackFixed.has(cat)).reduce((s, [, a]) => s + a, 0);
-          const _cbAutoPct = _cbFlexTotal > 0 ? Math.min(_cbGap / _cbFlexTotal * 100, 100) : 0;
+          const _cbReqFlex = Math.max(_cbGoal - _cbFixedTotal, 0);
+          const _cbAutoScale = _cbFlexTotal > 0 ? _cbReqFlex / _cbFlexTotal : 1;
           const cbRows = _cbAvgs.map(([cat, avg]) => {
             const isFixed = _cutbackFixed.has(cat);
-            const pct = isFixed ? 0 : _cbAutoPct;
-            const savings = avg * pct / 100;
+            const target = isFixed ? avg : Math.round(avg * _cbAutoScale);
+            const savings = Math.max(avg - target, 0);
             const color = catColor(cat);
             return `<div class="cb-row" data-cat="${cat.replace(/"/g, '&quot;')}" data-avg="${avg.toFixed(2)}" style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-light)">
               <div style="flex:1;display:flex;align-items:center;gap:6px;min-width:0">
                 <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
                 <span style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cat}</span>
-                <span style="font-size:11px;color:var(--text-muted);flex-shrink:0">${fmtAUD(avg)}/mo</span>
+                <span style="font-size:11px;color:var(--text-muted);flex-shrink:0">avg ${fmtAUD(avg)}</span>
               </div>
-              <input type="range" class="cb-slider" min="0" max="100" step="1" value="${pct.toFixed(0)}" ${isFixed ? 'disabled' : ''} oninput="updateCutbackPlan()" style="width:100px;flex-shrink:0;accent-color:${color}">
-              <span class="cb-pct" style="font-size:11px;color:var(--text-muted);flex:0 0 30px;text-align:right">${Math.round(pct)}%</span>
-              <span class="cb-save" style="font-size:11px;color:var(--accent);flex:0 0 76px;text-align:right">${savings > 0.5 ? '−'+fmtAUD(savings) : '—'}</span>
-              <span style="font-size:11px;color:var(--text-muted)">→</span>
-              <span class="cb-target" style="font-size:11px;font-weight:600;flex:0 0 76px">${fmtAUD(avg - savings)}</span>
+              <input type="range" class="cb-slider" min="0" max="${Math.ceil(avg)}" step="1" value="${target}" ${isFixed ? 'disabled' : ''} oninput="updateCutbackPlan()" style="width:110px;flex-shrink:0;accent-color:${color}">
+              <span style="font-size:10px;color:var(--text-muted);flex-shrink:0">Target</span>
+              <span class="cb-target" style="font-size:12px;font-weight:600;flex:0 0 72px;color:var(--text-primary)">${fmtAUD(target)}</span>
+              <span class="cb-save" style="font-size:11px;color:var(--accent);flex:0 0 88px;text-align:right">${savings > 0.5 ? '−'+fmtAUD(savings)+'/mo' : '—'}</span>
               <button class="cb-fixed-btn" onclick="toggleCutbackFixed(this.closest('.cb-row').dataset.cat)" style="font-size:10px;padding:2px 8px;border:1px solid ${isFixed ? 'var(--accent)' : 'var(--border)'};border-radius:4px;background:${isFixed ? 'var(--accent)' : 'var(--bg-secondary)'};color:${isFixed ? '#fff' : 'var(--text-muted)'};cursor:pointer;flex-shrink:0">Fixed</button>
             </div>`;
           }).join('');
