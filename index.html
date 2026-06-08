@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.86</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.87</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -2097,11 +2097,12 @@
         `<div class="budget-panel-box">${recurring.length ? recurHeader + recurRows : noData()}</div>`,
         `<span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:8px">detected from all-time data</span>`);
 
-      // Categories tab: hierarchical grid (top-level + sub-cats grouped)
+      // Categories tab: hierarchical grouped layout
       const catSpendMap = Object.fromEntries(catSpending(txs, true));
       const catAvgMap = avgMonthlyCatSpending(true);
       const _sp = getSubcatParents();
-      // Helper: render a single cat card
+
+      // Render a single category card (parent or sub-cat)
       const makeCatCard = (cat, isSubcat) => {
         const amt = catSpendMap[cat] || 0;
         const avg = catAvgMap[cat] || 0;
@@ -2110,38 +2111,47 @@
         const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const txCount = txs.filter(t => effectiveCat(t) === cat).length;
         const excluded = EXCLUDED_CATS.has(cat);
-        return `<div onclick="selectCategory('${esc}')" style="cursor:pointer;padding:${isSubcat?'10px 12px':'14px 16px'};border-radius:10px;border:2px solid ${isSelected ? color : 'var(--border)'};background:${isSelected ? 'var(--bg-secondary)' : 'var(--bg-primary)'};display:flex;flex-direction:column;gap:6px;transition:border-color .15s${excluded ? ';opacity:.55' : ''}${isSubcat ? ';border-style:dashed' : ''}">
-          <div style="display:flex;align-items:center;gap:8px">
-            ${isSubcat ? '<span style="font-size:10px;color:var(--text-muted);flex-shrink:0">↳</span>' : ''}
-            <span style="width:${isSubcat?8:10}px;height:${isSubcat?8:10}px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
-            <span style="font-size:12px;font-weight:600;color:var(--text-primary);flex:1">${cat}</span>
-            <button onclick="event.stopPropagation();showRenameCategoryModal('${esc}')" style="background:none;border:none;padding:0;cursor:pointer;font-size:12px;color:var(--text-muted);line-height:1" title="Rename">✏</button>
-            <button onclick="event.stopPropagation();toggleExcludedCat('${esc}')" style="background:none;border:none;padding:0;cursor:pointer;font-size:13px;color:${excluded ? '#ef4444' : 'var(--text-muted)'};line-height:1" title="${excluded ? 'Included — click to exclude' : 'Mark as unaccounted'}">⊘</button>
+        return `<div onclick="selectCategory('${esc}')" style="cursor:pointer;height:100%;box-sizing:border-box;padding:${isSubcat?'10px 12px':'14px 16px'};border-radius:10px;border:2px ${isSubcat?'dashed':'solid'} ${isSelected ? color : 'var(--border)'};background:${isSelected ? 'var(--bg-secondary)' : 'var(--bg-primary)'};display:flex;flex-direction:column;gap:5px;transition:border-color .15s${excluded ? ';opacity:.55' : ''}">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="width:${isSubcat?7:10}px;height:${isSubcat?7:10}px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
+            <span style="font-size:12px;font-weight:600;color:var(--text-primary);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cat}</span>
+            <button onclick="event.stopPropagation();showRenameCategoryModal('${esc}')" style="background:none;border:none;padding:0;cursor:pointer;font-size:11px;color:var(--text-muted);line-height:1;flex-shrink:0" title="Rename">✏</button>
+            <button onclick="event.stopPropagation();toggleExcludedCat('${esc}')" style="background:none;border:none;padding:0;cursor:pointer;font-size:12px;color:${excluded ? '#ef4444' : 'var(--text-muted)'};line-height:1;flex-shrink:0" title="${excluded ? 'Unaccounted — click to include' : 'Mark as unaccounted'}">⊘</button>
           </div>
           <div style="font-size:${isSubcat?'15':'18'}px;font-weight:700;color:${amt > 0 ? color : 'var(--text-muted)'}">${amt > 0 ? fmtAUD(amt) : '—'}</div>
           ${avg > 0 ? `<div style="font-size:11px;color:var(--text-muted)">avg ${fmtAUD(avg)}/mo</div>` : ''}
           <div style="font-size:11px;color:${excluded ? '#ef4444' : 'var(--text-muted)'}">${excluded ? 'unaccounted' : txCount > 0 ? txCount + ' tx' : 'no transactions'}</div>
         </div>`;
       };
-      // Top-level cats (not sub-cats), sorted
+
+      // Top-level cats sorted (excluded last)
       const topLevelCats = Object.keys(CAT_COLORS).filter(c => c !== 'Uncategorised' && c !== 'Other' && !_sp[c]).sort((a, b) => {
         const aEx = EXCLUDED_CATS.has(a), bEx = EXCLUDED_CATS.has(b);
         if (aEx !== bEx) return aEx ? 1 : -1;
         return a.localeCompare(b);
       });
-      // Build the grid: for each top-level cat, show its card then any sub-cats, then an "add sub-cat" button
-      let catGridInner = '';
-      topLevelCats.forEach(cat => {
+
+      // Each parent gets its own row: [parent card] | divider | [sub-cats + add button]
+      const catGroups = topLevelCats.map(cat => {
         const children = childrenOf(cat);
+        const color = catColor(cat);
         const escCat = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        catGridInner += makeCatCard(cat, false);
-        children.forEach(child => { catGridInner += makeCatCard(child, true); });
-        // Add sub-category button for this parent
-        catGridInner += `<div onclick="showAddCategoryModal('${escCat}')" style="cursor:pointer;padding:10px 12px;border-radius:10px;border:2px dashed var(--border);background:var(--bg-primary);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;transition:border-color .15s;min-height:80px" onmouseenter="this.style.borderColor='${catColor(cat)}'" onmouseleave="this.style.borderColor='var(--border)'">
+        const addSubBtn = `<div onclick="showAddCategoryModal('${escCat}')" style="cursor:pointer;min-width:100px;min-height:72px;border-radius:8px;border:2px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;transition:border-color .15s;flex-shrink:0;padding:8px" onmouseenter="this.style.borderColor='${color}'" onmouseleave="this.style.borderColor='var(--border)'">
           <div style="font-size:16px;color:var(--text-muted);line-height:1">+</div>
           <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-align:center">Sub-category</div>
         </div>`;
-      });
+        const childCards = children.map(child =>
+          `<div style="flex:0 0 140px">${makeCatCard(child, true)}</div>`
+        ).join('');
+        return `<div style="background:var(--bg-card);border:1px solid var(--border);border-left:4px solid ${color};border-radius:12px;padding:14px;display:flex;gap:14px;align-items:flex-start">
+          <div style="flex:0 0 175px">${makeCatCard(cat, false)}</div>
+          <div style="width:1px;background:var(--border);align-self:stretch;flex-shrink:0;opacity:.4"></div>
+          <div style="flex:1;display:flex;flex-wrap:wrap;gap:10px;align-content:flex-start">
+            ${childCards}${addSubBtn}
+          </div>
+        </div>`;
+      }).join('');
+
       const uncatAmt = catSpendMap['Uncategorised'] || 0;
       const uncatEsc = 'Uncategorised';
       const uncatCount = txs.filter(t => effectiveCat(t) === 'Uncategorised').length;
@@ -2157,7 +2167,10 @@
         <div style="font-size:24px;color:var(--text-muted);line-height:1">+</div>
         <div style="font-size:12px;font-weight:600;color:var(--text-muted)">New category</div>
       </div>`;
-      const catGrid = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px">${catGridInner}${uncatCard}${addCatCard}</div>`;
+      const catGrid = `<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px">
+        ${catGroups}
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">${uncatCard}${addCatCard}</div>
+      </div>`;
 
       // Top spending categories panel for the Categories tab
       const topSpendCats = catSpending(txs).filter(([, amt]) => amt > 0).slice(0, 10);
