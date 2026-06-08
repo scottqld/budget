@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.89</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.90</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -2117,6 +2117,7 @@
           <span style="font-size:${isSubcat?12:13}px;font-weight:${isSubcat?500:600};color:${amt>0?color:'var(--text-muted)'};min-width:80px;text-align:right;flex-shrink:0">${amt>0?fmtAUD(amt):'—'}</span>
           <span style="font-size:11px;color:var(--text-muted);min-width:80px;text-align:right;flex-shrink:0">${avg>0?'avg '+fmtAUD(avg)+'/mo':''}</span>
           <span style="font-size:11px;color:var(--text-muted);min-width:36px;text-align:right;flex-shrink:0">${txCount>0?txCount+'&nbsp;tx':''}</span>
+          <button onclick="event.stopPropagation();openParentPicker('${esc}',this)" style="background:none;border:none;padding:2px 4px;cursor:pointer;font-size:12px;color:var(--text-muted);line-height:1;flex-shrink:0" title="Move / change parent">⤵</button>
           <button onclick="event.stopPropagation();showRenameCategoryModal('${esc}')" style="background:none;border:none;padding:2px 4px;cursor:pointer;font-size:11px;color:var(--text-muted);line-height:1;flex-shrink:0" title="Rename">✏</button>
           <button onclick="event.stopPropagation();toggleExcludedCat('${esc}')" style="background:none;border:none;padding:2px 4px;cursor:pointer;font-size:12px;color:${excluded?'#ef4444':'var(--text-muted)'};line-height:1;flex-shrink:0" title="${excluded?'Unaccounted':'Mark unaccounted'}">⊘</button>
         </div>`;
@@ -3089,6 +3090,53 @@
       renderBudget();
     }
 
+    function setParentCat(cat, parent) {
+      const sp = getSubcatParents();
+      if (parent) sp[cat] = parent; else delete sp[cat];
+      localStorage.setItem('budget_subcat_parents', JSON.stringify(sp));
+      showStatus(parent ? `"${cat}" moved under "${parent}"` : `"${cat}" promoted to top-level`);
+      renderBudget();
+    }
+
+    function openParentPicker(cat, btn) {
+      document.querySelectorAll('.parent-picker').forEach(d => d.remove());
+      const sp = getSubcatParents();
+      const currentParent = sp[cat] || null;
+      // Valid parents: top-level cats that aren't this cat or its own children
+      const ownChildren = new Set(Object.entries(sp).filter(([,v]) => v === cat).map(([k]) => k));
+      const validParents = Object.keys(CAT_COLORS)
+        .filter(c => c !== cat && c !== 'Uncategorised' && c !== 'Other' && !sp[c] && !ownChildren.has(c))
+        .sort();
+      const picker = document.createElement('div');
+      picker.className = 'parent-picker';
+      picker.style.cssText = 'position:fixed;z-index:9999;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.3);padding:4px;min-width:190px;font-family:inherit;max-height:300px;overflow-y:auto';
+      const mkItem = (label, color, isCurrent, onClick) => {
+        const el = document.createElement('div');
+        el.style.cssText = `padding:6px 10px;cursor:pointer;border-radius:4px;font-size:12px;display:flex;align-items:center;gap:8px;font-weight:${isCurrent?700:400}`;
+        el.innerHTML = color
+          ? `<span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span><span style="color:var(--text-primary)">${label}${isCurrent?' ✓':''}</span>`
+          : `<span style="color:var(--text-muted)">${label}${isCurrent?' ✓':''}</span>`;
+        el.onmouseenter = () => el.style.background = 'var(--bg-secondary)';
+        el.onmouseleave = () => el.style.background = '';
+        el.onclick = e => { e.stopPropagation(); onClick(); picker.remove(); };
+        picker.appendChild(el);
+      };
+      mkItem('— Top-level (no parent)', null, !currentParent, () => setParentCat(cat, null));
+      if (validParents.length) {
+        const sep = document.createElement('div');
+        sep.style.cssText = 'height:1px;background:var(--border);margin:4px 0';
+        picker.appendChild(sep);
+        validParents.forEach(p => mkItem(p, catColor(p), currentParent === p, () => setParentCat(cat, p)));
+      }
+      const rect = btn.getBoundingClientRect();
+      picker.style.left = Math.min(rect.left, window.innerWidth - 210) + 'px';
+      const spaceBelow = window.innerHeight - rect.bottom;
+      if (spaceBelow > 200) { picker.style.top = (rect.bottom + 4) + 'px'; }
+      else { picker.style.top = (rect.top - 4) + 'px'; picker.style.transform = 'translateY(-100%)'; }
+      document.body.appendChild(picker);
+      setTimeout(() => document.addEventListener('click', function c() { picker.remove(); document.removeEventListener('click', c); }, { once: true }), 0);
+    }
+
     async function deleteTx(id) {
       if (!confirm('Delete this transaction? This cannot be undone.')) return;
       const db = await openDB();
@@ -3133,6 +3181,8 @@
     window.saveNewCategory = saveNewCategory;
     window.showRenameCategoryModal = showRenameCategoryModal;
     window.saveRenameCategory = saveRenameCategory;
+    window.openParentPicker = openParentPicker;
+    window.setParentCat = setParentCat;
     window.showVendorDescModal = showVendorDescModal;
     window.saveVendorDesc = saveVendorDesc;
 
