@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.78</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.79</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1524,24 +1524,20 @@
         cum += dash;
         return s;
       }).join('');
-      const legend = allSlices.map(([cat, amt]) => {
+      const legendRows = allSlices.map(([cat, amt]) => {
         const pct = Math.round((amt / total) * 100);
-        if (cat === 'Other') {
-          return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0">
-            <span style="width:10px;height:10px;border-radius:2px;background:#9ca3af;flex-shrink:0"></span>
-            <span style="font-size:12px;color:var(--text-muted)">Other</span>
-            <span style="font-size:11px;color:var(--text-muted)">${pct}%</span>
-            <span style="font-size:12px;color:var(--text-muted)">${fmtAUD(amt)}</span>
-          </div>`;
-        }
-        const esc = cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        return `<div onclick="selectOverviewCategory('${esc}')" style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer">
-          <span style="width:10px;height:10px;border-radius:2px;background:${catColor(cat)};flex-shrink:0"></span>
-          <span style="font-size:12px;color:var(--text-primary)">${cat}</span>
-          <span style="font-size:11px;color:var(--text-muted)">${pct}%</span>
-          <span style="font-size:12px;font-weight:600;color:var(--text-primary)">${fmtAUD(amt)}</span>
-        </div>`;
+        const color = cat === 'Other' ? '#9ca3af' : catColor(cat);
+        const muted = cat === 'Other';
+        const esc = muted ? '' : cat.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const rowAttrs = muted ? '' : `onclick="selectOverviewCategory('${esc}')" style="cursor:pointer" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background=''`;
+        return `<tr ${rowAttrs}>
+          <td style="padding:3px 6px 3px 0;width:12px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${color}"></span></td>
+          <td style="padding:3px 4px;font-size:12px;color:${muted ? 'var(--text-muted)' : 'var(--text-primary)'}">${cat}</td>
+          <td style="padding:3px 4px;font-size:11px;color:var(--text-muted);text-align:right;white-space:nowrap">${pct}%</td>
+          <td style="padding:3px 0 3px 8px;font-size:12px;font-weight:${muted ? '400' : '600'};color:${muted ? 'var(--text-muted)' : 'var(--text-primary)'};text-align:right;white-space:nowrap">${fmtAUD(amt)}</td>
+        </tr>`;
       }).join('');
+      const legend = `<table style="width:100%;border-collapse:collapse">${legendRows}</table>`;
       const svg = `<svg width="${cx*2}" height="${cy*2}" style="flex-shrink:0;overflow:visible">
         ${slices}
         <text x="${cx}" y="${cy-7}" text-anchor="middle" style="font-size:10px;fill:var(--text-muted)">Total</text>
