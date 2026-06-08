@@ -196,7 +196,7 @@
 </head>
 <body>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.72</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.73</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -2002,7 +2002,49 @@
         } else if (budgetSelectedIncomeSource) {
           overviewDrill = incDetailPanel;
         }
-        const _ovPanels = { cards, savings: savingsPanel, annual: annualSummaryPanel, breakdown: spendingBreakdownPanel, compare: comparePanel };
+        // Last month vs avg vs current month comparison panel
+        const _cmpMonthlyData = monthlyTotals();
+        const _todayM = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
+        const _cmpAllMonths = _cmpMonthlyData.map(([m]) => m);
+        const _cmpCurMonth = _cmpAllMonths.includes(_todayM) ? _todayM : _cmpAllMonths[_cmpAllMonths.length - 1] || null;
+        const _cmpLastMonth = _cmpCurMonth ? _cmpAllMonths[_cmpAllMonths.indexOf(_cmpCurMonth) - 1] || null : null;
+        const _cmpN = _cmpAllMonths.length || 1;
+        const _cmpGet = m => { const d = _cmpMonthlyData.find(([k]) => k === m); return d ? d[1] : { inc: 0, exp: 0 }; };
+        const _cmpLifetime = _cmpMonthlyData.reduce((a, [, d]) => ({ inc: a.inc + d.inc, exp: a.exp + d.exp }), { inc: 0, exp: 0 });
+        const _cmpAvg = { inc: _cmpLifetime.inc / _cmpN, exp: _cmpLifetime.exp / _cmpN };
+        const _cmpCur = _cmpGet(_cmpCurMonth);
+        const _cmpLast = _cmpGet(_cmpLastMonth);
+
+        const _cmpCol = (label, data, highlight = false) => {
+          const net = data.inc - data.exp;
+          const bold = highlight ? 'font-weight:700' : 'font-weight:400';
+          return `<td style="text-align:right;padding:8px 16px;border-left:1px solid var(--border-light)">
+            <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:8px;white-space:nowrap">${label}</div>
+            <div style="font-size:13px;${bold};color:#16a34a;margin-bottom:4px">${data.inc > 0 ? '+' + fmtAUD(data.inc) : '—'}</div>
+            <div style="font-size:13px;${bold};color:var(--accent);margin-bottom:4px">${data.exp > 0 ? '−' + fmtAUD(data.exp) : '—'}</div>
+            <div style="font-size:13px;${bold};color:${net >= 0 ? '#16a34a' : '#ef4444'};border-top:1px solid var(--border-light);padding-top:4px;margin-top:2px">${net >= 0 ? '+' : '−'}${fmtAUD(Math.abs(net))}</div>
+          </td>`;
+        };
+        const monthlyComparePanel = `<div style="margin-bottom:16px">
+          <div class="budget-section-title" style="margin-bottom:10px">Monthly comparison</div>
+          <div class="budget-panel-box" style="padding:0;overflow:hidden">
+            <table style="width:100%;border-collapse:collapse">
+              <tbody><tr>
+                <td style="padding:8px 16px;vertical-align:bottom">
+                  <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">&nbsp;</div>
+                  <div style="font-size:12px;color:#16a34a;margin-bottom:4px">Income</div>
+                  <div style="font-size:12px;color:var(--accent);margin-bottom:4px">Expenses</div>
+                  <div style="font-size:12px;color:var(--text-muted);border-top:1px solid var(--border-light);padding-top:4px;margin-top:2px">Net</div>
+                </td>
+                ${_cmpLastMonth ? _cmpCol(fmtMonth(_cmpLastMonth), _cmpLast) : ''}
+                ${_cmpCol('Avg / mo', _cmpAvg)}
+                ${_cmpCol(_cmpCurMonth ? fmtMonth(_cmpCurMonth) : 'Current', _cmpCur, true)}
+              </tr></tbody>
+            </table>
+          </div>
+        </div>`;
+
+        const _ovPanels = { cards, savings: savingsPanel, annual: annualSummaryPanel, breakdown: spendingBreakdownPanel, compare: comparePanel, monthlyCompare: monthlyComparePanel };
         const _ovOrder = getOverviewOrder();
         const _ovFull = [..._ovOrder.filter(id => id in _ovPanels), ...OV_DEFAULT_ORDER.filter(id => !_ovOrder.includes(id) && id in _ovPanels)];
         const _ovHtml = _ovFull.map(id => _ovPanels[id] ? ovDraggable(id, _ovPanels[id]) : '').join('');
@@ -2514,7 +2556,7 @@
       if (content) content.style.display = s.has(id) ? 'none' : '';
       if (btn) btn.textContent = s.has(id) ? '›' : '⌄';
     }
-    const OV_DEFAULT_ORDER = ['cards', 'savings', 'annual', 'breakdown', 'compare'];
+    const OV_DEFAULT_ORDER = ['cards', 'monthlyCompare', 'savings', 'annual', 'breakdown', 'compare'];
     function getOverviewOrder() {
       try {
         const o = JSON.parse(localStorage.getItem('budget_overview_order') || '[]');
