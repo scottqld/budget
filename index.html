@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.0</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v2.1</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1684,16 +1684,12 @@
           return { m, inc, exp, net: inc - exp };
         });
         const maxAbs = Math.max(...monthlyData.map(d => Math.max(d.inc, d.exp)), 1);
-        const rows = monthlyData.map(({ m, inc, exp, net }) => {
-          const isCurrentMonth = m === budgetSelectedMonth;
+        const maxNet = Math.max(...monthlyData.map(d => Math.abs(d.net)), 1);
+        const rows = monthlyData.map(({ m, exp, net }) => {
           const savings = net >= 0;
           return `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;cursor:pointer" onclick="selectMonth('${m}')">
             <div style="flex:0 0 44px;font-size:11px;color:var(--text-muted);text-align:right">${fmtMonth(m).replace(' ' + budgetSelectedYear, '')}</div>
             <div style="flex:1;display:flex;flex-direction:column;gap:3px">
-              <div style="display:flex;align-items:center;gap:4px">
-                <div style="height:6px;border-radius:3px;background:#16a34a;width:${(inc / maxAbs) * 100}%;min-width:${inc > 0 ? 2 : 0}px"></div>
-                <span style="font-size:10px;color:#16a34a">+${fmtAUD(inc)}</span>
-              </div>
               <div style="display:flex;align-items:center;gap:4px">
                 <div style="height:6px;border-radius:3px;background:var(--accent);width:${(exp / maxAbs) * 100}%;min-width:${exp > 0 ? 2 : 0}px"></div>
                 <span style="font-size:10px;color:var(--accent)">−${fmtAUD(exp)}</span>
@@ -2293,7 +2289,6 @@
           const bold = highlight ? 'font-weight:700' : 'font-weight:400';
           return `<td style="text-align:right;padding:8px 16px;border-left:1px solid var(--border-light)">
             <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:8px;white-space:nowrap">${label}</div>
-            <div style="font-size:13px;${bold};color:#16a34a;margin-bottom:4px">${data.inc > 0 ? '+' + fmtAUD(data.inc) : '—'}</div>
             <div style="font-size:13px;${bold};color:var(--accent);margin-bottom:4px">${data.exp > 0 ? '−' + fmtAUD(data.exp) : '—'}</div>
             <div style="font-size:13px;${bold};color:${net >= 0 ? '#16a34a' : '#ef4444'};border-top:1px solid var(--border-light);padding-top:4px;margin-top:2px">${net >= 0 ? '+' : '−'}${fmtAUD(Math.abs(net))}</div>
           </td>`;
@@ -2305,7 +2300,6 @@
               <tbody><tr>
                 <td style="padding:8px 16px;vertical-align:bottom">
                   <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">&nbsp;</div>
-                  <div style="font-size:12px;color:#16a34a;margin-bottom:4px">Income</div>
                   <div style="font-size:12px;color:var(--accent);margin-bottom:4px">Expenses</div>
                   <div style="font-size:12px;color:var(--text-muted);border-top:1px solid var(--border-light);padding-top:4px;margin-top:2px">Net</div>
                 </td>
