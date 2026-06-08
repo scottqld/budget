@@ -202,7 +202,7 @@
 <body>
   <div id="tx-bulk-bar"></div>
   <header>
-    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.97</span></h1>
+    <h1>Budget <span style="font-size:12px;font-weight:400;color:var(--text-muted)">v1.98</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="resetBtn" style="font-size:12px;padding:6px 12px">Reset</button>
       <button onclick="toggleSettings()" style="font-size:12px;padding:6px 12px">⚙ Settings</button>
@@ -1862,9 +1862,10 @@
       let _bdTxSection = '';
       if (_bdSelectedCat) {
         const _bdTop8 = new Set(_bdEntries.slice(0, 8).map(([c]) => c));
+        const _bsp2 = getSubcatParents();
         let _bdCatTxs = _bdSelectedCat === 'Other'
-          ? _bdBase.filter(t => { const c = effectiveCat(t); return t.debit > 0 && !_bdTop8.has(c) && c !== 'Uncategorised' && !EXCLUDED_CATS.has(c); })
-          : _bdBase.filter(t => t.debit > 0 && effectiveCat(t) === _bdSelectedCat);
+          ? _bdBase.filter(t => { const c = effectiveCat(t); const top = _bsp2[c] || c; return t.debit > 0 && !_bdTop8.has(top) && c !== 'Uncategorised' && !EXCLUDED_CATS.has(c); })
+          : _bdBase.filter(t => t.debit > 0 && catGroup(_bdSelectedCat).has(effectiveCat(t)));
         if (_bdTab.startsWith('m:')) {
           _bdCatTxs = _bdCatTxs.filter(t => t.month === _bdTab.slice(2));
         } else if (_bdTab === 'yearly') {
@@ -1872,9 +1873,11 @@
         }
         _bdCatTxs = _bdCatTxs.sort((a, b) => b.date - a.date);
         const _bdSelColor = catColor(_bdSelectedCat);
+        const _bdSelChildren = _bdSelectedCat !== 'Other' ? childrenOf(_bdSelectedCat) : [];
+        const _bdSubLabel = _bdSelChildren.length ? `<span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:4px">+ ${_bdSelChildren.join(', ')}</span>` : '';
         _bdTxSection = `<div style="margin-top:16px;border-top:1px solid var(--border-light);padding-top:12px">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-            <span style="font-size:12px;font-weight:600;color:${_bdSelColor}">${_bdSelectedCat}</span>
+            <span style="font-size:12px;font-weight:600;color:${_bdSelColor}">${_bdSelectedCat}</span>${_bdSubLabel}
             <span style="font-size:11px;color:var(--text-muted)">${_bdCatTxs.length} transaction${_bdCatTxs.length !== 1 ? 's' : ''} · ${fmtAUD(_bdCatTxs.reduce((s,t)=>s+t.debit,0))}</span>
             <button onclick="selectDonutCat(null)" style="margin-left:auto;font-size:11px;padding:2px 8px;background:transparent;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--text-muted)">✕ Close</button>
           </div>
